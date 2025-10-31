@@ -1,55 +1,61 @@
-#!/bin/bash
+@echo off
+setlocal enabledelayedexpansion
 
-# Vehicle Painter Launcher Script
-# Creates a virtual environment, installs dependencies, and runs the application
+REM Vehicle Painter Launcher Script
+REM Creates a virtual environment, installs dependencies, and runs the application
 
-set -e  # Exit on error
+set "SCRIPT_DIR=%~dp0"
+set "VENV_DIR=%SCRIPT_DIR%venv"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="$SCRIPT_DIR/venv"
+echo Vehicle Painter for Cataclysm: Bright Nights
+echo ==============================================
+echo.
 
-echo "Vehicle Painter for Cataclysm: Bright Nights"
-echo "=============================================="
-echo ""
+REM Check if Python is available
+python --version >nul 2>&1
+if errorlevel 1 (
+    py --version >nul 2>&1
+    if errorlevel 1 (
+        echo Error: python is not installed or not in PATH
+        exit /b 1
+    ) else (
+        set "PYTHON_CMD=py"
+    )
+) else (
+    set "PYTHON_CMD=python"
+)
 
-# Check if Python 3 is available
-if ! command -v python3 &> /dev/null; then
-    echo "Error: python3 is not installed or not in PATH"
-    exit 1
-fi
+REM Create virtual environment if it doesn't exist
+if not exist "%VENV_DIR%" (
+    echo Creating virtual environment...
+    %PYTHON_CMD% -m venv "%VENV_DIR%"
+    echo Virtual environment created.
+) else (
+    echo Virtual environment already exists.
+)
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv "$VENV_DIR"
-    echo "Virtual environment created."
-else
-    echo "Virtual environment already exists."
-fi
+REM Activate virtual environment
+echo Activating virtual environment...
+call "%VENV_DIR%\Scripts\activate.bat"
 
-# Activate virtual environment
-echo "Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
+REM Upgrade pip
+echo Upgrading pip...
+python -m pip install --upgrade pip --quiet
 
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip --quiet
+REM Install requirements
+if exist "%SCRIPT_DIR%requirements.txt" (
+    echo Installing requirements...
+    python -m pip install -r "%SCRIPT_DIR%requirements.txt" --quiet
+) else (
+    echo Warning: requirements.txt not found, skipping dependency installation.
+)
 
-# Install requirements
-if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-    echo "Installing requirements..."
-    pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
-else
-    echo "Warning: requirements.txt not found, skipping dependency installation."
-fi
+echo.
+echo Starting Vehicle Painter...
+echo.
 
-echo ""
-echo "Starting Vehicle Painter..."
-echo ""
+REM Run the application
+python "%SCRIPT_DIR%main.py"
 
-# Run the application
-python3 "$SCRIPT_DIR/main.py"
-
-# Deactivate virtual environment when done
-deactivate
-
+REM Deactivate virtual environment when done
+call deactivate

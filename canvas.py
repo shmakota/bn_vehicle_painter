@@ -6,7 +6,7 @@ import tkinter as tk
 from math import sqrt, floor
 import hashlib
 from tile_editor import TileEditorDialog
-from tileset import TilesetLoader
+# from tileset import TilesetLoader  # Disabled for now
 
 
 class VehicleCanvas(tk.Canvas):
@@ -20,6 +20,7 @@ class VehicleCanvas(tk.Canvas):
         self.palette = palette
         self.char_var = char_var  # Reference to main app's char_var for UI updates
         self.zoom_callback = None  # Callback for zoom updates (e.g., to update UI label)
+        self.coordinate_callback = None  # Callback for coordinate updates (e.g., to update UI label)
         
         # Grid settings
         self.base_grid_size = 16  # Base pixels per grid cell (at 100% zoom) - reduced from 20 for smaller cells
@@ -30,7 +31,7 @@ class VehicleCanvas(tk.Canvas):
         self.show_grid = True
         
         # Infinite scroll settings
-        self.scroll_region_size = 100000  # Large scroll region for infinite scrolling
+        self.scroll_region_size = 2500  # Scroll region size (creates 5000x5000 area from -2500 to +2500)
         
         # Drawing state
         self.is_drawing = False
@@ -61,16 +62,18 @@ class VehicleCanvas(tk.Canvas):
             "#82E0AA", "#AED6F1", "#F4D03F", "#A569BD", "#48C9B0"
         ]
         
-        # Load tileset for vehicle parts
-        try:
-            self.tileset_loader = TilesetLoader()
-            self._image_refs = []  # Store image references to prevent garbage collection
-        except Exception as e:
-            print(f"Warning: Could not load tileset: {e}")
-            import traceback
-            traceback.print_exc()
-            self.tileset_loader = None
-            self._image_refs = []
+        # Load tileset for vehicle parts (disabled for now)
+        # try:
+        #     self.tileset_loader = TilesetLoader()
+        #     self._image_refs = []  # Store image references to prevent garbage collection
+        # except Exception as e:
+        #     print(f"Warning: Could not load tileset: {e}")
+        #     import traceback
+        #     traceback.print_exc()
+        #     self.tileset_loader = None
+        #     self._image_refs = []
+        self.tileset_loader = None
+        self._image_refs = []
         
         # Bind events
         self.bind("<Button-1>", self.on_click)
@@ -212,6 +215,10 @@ class VehicleCanvas(tk.Canvas):
         self.last_mouse_y = y
         self.last_mouse_grid = (grid_x, grid_y)
         
+        # Update coordinate display if callback is set
+        if self.coordinate_callback:
+            self.coordinate_callback(grid_x, grid_y)
+        
         # Check if we're hovering over a different tile
         if (grid_x, grid_y) != self.current_hover_tile:
             self.current_hover_tile = (grid_x, grid_y)
@@ -221,6 +228,10 @@ class VehicleCanvas(tk.Canvas):
         """Handle mouse leaving canvas - hide tooltip."""
         self.hide_tooltip()
         self.current_hover_tile = None
+        # Clear coordinate display when mouse leaves
+        if self.coordinate_callback:
+            # Pass None to indicate mouse is outside canvas
+            self.coordinate_callback(None, None)
     
     def on_key_press(self, event):
         """Handle keyboard input for arrow key navigation and palette hotkeys."""
@@ -605,46 +616,46 @@ class VehicleCanvas(tk.Canvas):
         items = self.vehicle.get_items_at(grid_x, grid_y)
         
         if parts or items:
-            # Try to draw tileset tile if available
-            if parts and self.tileset_loader:
-                primary_part = parts[0]
-                primary_name = self.get_primary_part_name(primary_part)
-                
-                if primary_name:
-                    # Get tile image resized to grid size (convert to int for PIL)
-                    grid_size_int = int(self.grid_size)
-                    tile_image = self.tileset_loader.get_tile_image(
-                        primary_name,
-                        target_size=(grid_size_int, grid_size_int)
-                    )
-                    if tile_image:
-                        # Draw the tile image (fill the entire cell)
-                        # x, y are already screen coordinates from grid_to_screen()
-                        # Position at top-left corner of cell, not centered
-                        img_x = x
-                        img_y = y
-                        
-                        img_id = self.create_image(
-                            img_x,
-                            img_y,
-                            image=tile_image,
-                            anchor=tk.NW,  # Anchor to northwest (top-left) corner
-                            tags=(cell_id, "cell")
-                        )
-                        # Keep reference to prevent garbage collection
-                        # Store image reference in a way that persists
-                        if not hasattr(self, '_image_refs_dict'):
-                            self._image_refs_dict = {}
-                        self._image_refs_dict[img_id] = tile_image
-                    else:
-                        # Fallback to checkered pattern if tile not found
-                        self._draw_checkered_fallback(x, y, cell_id)
-                else:
-                    # Fallback to checkered pattern
-                    self._draw_checkered_fallback(x, y, cell_id)
-            else:
-                # No tileset or items only - use checkered pattern
-                self._draw_checkered_fallback(x, y, cell_id)
+            # Tileset drawing disabled for now - use checkered pattern
+            # if parts and self.tileset_loader:
+            #     primary_part = parts[0]
+            #     primary_name = self.get_primary_part_name(primary_part)
+            #     
+            #     if primary_name:
+            #         # Get tile image resized to grid size (convert to int for PIL)
+            #         grid_size_int = int(self.grid_size)
+            #         tile_image = self.tileset_loader.get_tile_image(
+            #             primary_name,
+            #             target_size=(grid_size_int, grid_size_int)
+            #         )
+            #         if tile_image:
+            #             # Draw the tile image (fill the entire cell)
+            #             # x, y are already screen coordinates from grid_to_screen()
+            #             # Position at top-left corner of cell, not centered
+            #             img_x = x
+            #             img_y = y
+            #             
+            #             img_id = self.create_image(
+            #                 img_x,
+            #                 img_y,
+            #                 image=tile_image,
+            #                 anchor=tk.NW,  # Anchor to northwest (top-left) corner
+            #                 tags=(cell_id, "cell")
+            #             )
+            #             # Keep reference to prevent garbage collection
+            #             # Store image reference in a way that persists
+            #             if not hasattr(self, '_image_refs_dict'):
+            #                 self._image_refs_dict = {}
+            #             self._image_refs_dict[img_id] = tile_image
+            #         else:
+            #             # Fallback to checkered pattern if tile not found
+            #             self._draw_checkered_fallback(x, y, cell_id)
+            #     else:
+            #         # Fallback to checkered pattern
+            #         self._draw_checkered_fallback(x, y, cell_id)
+            # else:
+            #     # No tileset or items only - use checkered pattern
+            self._draw_checkered_fallback(x, y, cell_id)
         else:
             # Empty cell
             self.create_rectangle(

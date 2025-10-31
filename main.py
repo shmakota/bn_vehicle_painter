@@ -274,6 +274,7 @@ class VehiclePainterApp:
         )
         self.canvas.tile_editor_callback = self.update_parts_count
         self.canvas.zoom_callback = self.update_zoom_label
+        self.canvas.coordinate_callback = self.update_coordinate_label
         
         # Add zoom and recenter buttons on canvas frame (bottom right)
         button_frame = ttk.Frame(canvas_frame)
@@ -315,6 +316,16 @@ class VehiclePainterApp:
         self.button_frame = button_frame
         # Position will be set after canvas is configured
         
+        # Add coordinate label in bottom left corner
+        self.coordinate_label = ttk.Label(
+            canvas_frame,
+            text="(0, 0)",
+            background="white",
+            relief=tk.SUNKEN,
+            padding=(5, 2)
+        )
+        self.coordinate_label.place(x=10, y=10)  # Temporary position, will be updated
+        
         scrollbar_v = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self.canvas_scroll_vertical)
         scrollbar_h = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, command=self.canvas_scroll_horizontal)
         self.canvas.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
@@ -327,6 +338,8 @@ class VehiclePainterApp:
         
         # Position recenter button in bottom right corner
         self.position_recenter_button()
+        # Position coordinate label in bottom left corner
+        self.position_coordinate_label()
         
         # Status bar
         self.status_bar = ttk.Label(
@@ -398,6 +411,29 @@ class VehiclePainterApp:
         # Also update when canvas frame resizes
         self.recenter_canvas_frame.bind("<Configure>", lambda e: update_position())
     
+    def position_coordinate_label(self):
+        """Position the coordinate label in the bottom left corner of the canvas."""
+        def update_position():
+            # Get canvas frame dimensions
+            frame_width = self.recenter_canvas_frame.winfo_width()
+            frame_height = self.recenter_canvas_frame.winfo_height()
+            if frame_width > 1 and frame_height > 1:
+                # Get coordinate label dimensions
+                self.coordinate_label.update_idletasks()
+                label_width = self.coordinate_label.winfo_width() or 80
+                label_height = self.coordinate_label.winfo_height() or 20
+                
+                # Position in bottom left with some padding
+                x = 10  # Padding from left
+                y = frame_height - label_height - 25  # Padding from bottom (accounting for horizontal scrollbar)
+                
+                self.coordinate_label.place(x=x, y=y)
+        
+        # Update position after canvas is configured
+        self.root.after_idle(update_position)
+        # Also update when canvas frame resizes
+        self.recenter_canvas_frame.bind("<Configure>", lambda e: update_position())
+    
     def zoom_in(self):
         """Zoom in on the canvas."""
         self.canvas.zoom_in()
@@ -419,6 +455,13 @@ class VehiclePainterApp:
         """Update the zoom percentage label."""
         zoom_percent = int(self.canvas.zoom_level * 100)
         self.zoom_label.config(text=f"{zoom_percent}%")
+    
+    def update_coordinate_label(self, grid_x, grid_y):
+        """Update the coordinate label with current grid position."""
+        if grid_x is None or grid_y is None:
+            self.coordinate_label.config(text="")
+        else:
+            self.coordinate_label.config(text=f"({grid_x}, {grid_y})")
     
     def recenter_view(self):
         """Recenter the canvas view on the vehicle or origin, properly centered in viewport."""
@@ -1053,145 +1096,864 @@ class VehiclePainterApp:
         self.status_bar.config(text=message)
     
     def show_information_atlas(self):
-        """Show an information dialog explaining UI elements and features."""
+        """Show an enhanced information dialog explaining UI elements and features."""
         dialog = tk.Toplevel(self.root)
-        dialog.title("Information Atlas")
-        dialog.geometry("600x500")
+        dialog.title("Information Atlas - Vehicle Painter")
+        dialog.geometry("900x750")
         dialog.transient(self.root)
         
-        # Label
-        label = ttk.Label(dialog, text="Vehicle Painter - Information Atlas", font=("TkDefaultFont", 12, "bold"))
-        label.pack(pady=10)
+        # Main container
+        main_container = ttk.Frame(dialog)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Text widget with scrollbar
-        text_frame = ttk.Frame(dialog)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Title
+        title_frame = ttk.Frame(main_container)
+        title_frame.pack(fill=tk.X, pady=(0, 10))
         
-        scrollbar = ttk.Scrollbar(text_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        text_widget = tk.Text(
-            text_frame,
-            yscrollcommand=scrollbar.set,
-            wrap=tk.WORD,
-            padx=10,
-            pady=10,
-            font=("TkDefaultFont", 10)
+        title_label = ttk.Label(
+            title_frame,
+            text="🚗 Vehicle Painter - Information Atlas",
+            font=("TkDefaultFont", 16, "bold")
         )
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=text_widget.yview)
+        title_label.pack()
         
-        # Information content
-        info_text = """VEHICLE PAINTER INFORMATION ATLAS
-
-=== VISUAL INDICATORS ===
-
-ORANGE DOTS:
-  • Orange dots appear in the top-right corner of tiles that contain MULTIPLE vehicle parts
-  • This helps you quickly identify complex tiles
-  • Click on a tile with an orange dot to see all parts and items in the Edit Tile dialog
-
-ORIGIN MARKERS:
-  • Red lines mark the X=0 and Y=0 axes
-  • A red circle marks the origin point (0, 0)
-  • These help you orient yourself on the infinite grid
-
-COLORED TILES:
-  • Light blue tiles: Contain vehicle parts or items
-  • White tiles: Empty grid cells
-  • Blue outline: Indicates a cell with content
-
-=== TOOLS ===
-
-PAINT TOOL:
-  • Click or drag to paint tiles using the selected palette character
-  • Uses the character shown in the "Char" field
-  • Creates parts and items based on the palette definition
-
-ERASE TOOL:
-  • Click or drag to remove all parts and items from tiles
-  • Completely clears a tile
-
-EDIT TILE TOOL:
-  • Click on a tile to open the detailed editor
-  • Right-click also opens the tile editor
-  • Add, remove, or modify individual parts and items
-  • Edit fuel types, item chances, and more
-
-=== KEYBOARD NAVIGATION ===
-
-ARROW KEYS:
-  • Use Up, Down, Left, Right to move the view one tile at a time
-  • Click the canvas first to give it focus
-  • Great for precise navigation
-
-=== PALETTE ===
-
-PALETTE SYSTEM:
-  • Load palettes from JSON files or generate them from vehicles
-  • Each character represents a specific part/item configuration
-  • Characters are automatically generated when loading a vehicle
-  • Search the palette to find specific parts or items
-  • Double-click palette entries to edit them
-
-=== VEHICLE LOADING ===
-
-MULTI-VEHICLE FILES:
-  • If a JSON file contains multiple vehicles, a selection dialog appears
-  • Choose which vehicle to load from the list
-  • Shows vehicle name, ID, and part/item counts
-
-COORDINATE NORMALIZATION:
-  • Vehicles are automatically shifted to start at (0, 0)
-  • Ensures vehicles align properly with the grid
-
-=== MOUSE HOVER ===
-
-TOOLTIPS:
-  • Hover over tiles to see detailed information
-  • Shows all parts and items at that location
-  • Displays part types, fuel types, item groups, and chances
-  • Automatically hides when you move the mouse away
-
-=== PANEL CONTROLS ===
-
-LEFT PANEL:
-  • Drag the separator bar to resize the left panel
-  • All controls expand to fill the panel width
-  • Palette, Tools, Vehicle Info, and File operations
-
-RECENTER VIEW:
-  • Click "Recenter" button (bottom right of canvas)
-  • Centers the view on the vehicle (if loaded)
-  • Or centers on origin (0, 0) if no vehicle
-
-=== SAVING ===
-
-EXPORT FORMAT:
-  • Vehicles are saved in Cataclysm: Bright Nights JSON format
-  • Includes "exported with vehicle painter" comment
-  • Blueprint comes after parts/items
-  • Matches the formatting style of official vehicle files
-
-=== TIPS ===
-
-1. Use the palette search to quickly find specific parts
-2. Right-click is a quick way to edit tiles
-3. Arrow keys provide precise navigation
-4. Orange dots indicate tiles worth inspecting
-5. Hover tooltips give instant information without clicking
-6. The recenter button helps navigate large vehicles
-
-For more information, check the project documentation."""
+        subtitle_label = ttk.Label(
+            title_frame,
+            text="Complete guide to all features, shortcuts, and tips",
+            font=("TkDefaultFont", 9),
+            foreground="gray"
+        )
+        subtitle_label.pack()
         
-        text_widget.insert("1.0", info_text)
-        text_widget.config(state=tk.DISABLED)  # Make it read-only
+        # Search frame
+        search_frame = ttk.Frame(main_container)
+        search_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(search_frame, text="Search:", font=("TkDefaultFont", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var, width=30)
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Notebook for tabs
+        notebook = ttk.Notebook(main_container)
+        notebook.pack(fill=tk.BOTH, expand=True)
+        
+        # Create tab content functions
+        def create_text_widget(parent):
+            """Create a text widget with scrollbar."""
+            text_frame = ttk.Frame(parent)
+            text_frame.pack(fill=tk.BOTH, expand=True)
+            
+            scrollbar = ttk.Scrollbar(text_frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            text_widget = tk.Text(
+                text_frame,
+                yscrollcommand=scrollbar.set,
+                wrap=tk.WORD,
+                padx=15,
+                pady=15,
+                font=("TkDefaultFont", 10),
+                relief=tk.FLAT,
+                bg="#FAFAFA"
+            )
+            text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.config(command=text_widget.yview)
+            return text_widget
+        
+        def configure_text_tags(text_widget):
+            """Configure text formatting tags."""
+            text_widget.tag_configure("heading", font=("TkDefaultFont", 12, "bold"), foreground="#2C3E50")
+            text_widget.tag_configure("subheading", font=("TkDefaultFont", 10, "bold"), foreground="#34495E")
+            text_widget.tag_configure("highlight", foreground="#E74C3C", font=("TkDefaultFont", 10, "bold"))
+            text_widget.tag_configure("code", font=("Courier", 9), background="#ECF0F1", relief=tk.RAISED, borderwidth=1)
+            text_widget.tag_configure("tip", foreground="#27AE60", font=("TkDefaultFont", 10))
+            text_widget.tag_configure("bullet", foreground="#3498DB")
+        
+        # Tab 1: Getting Started
+        tab1 = ttk.Frame(notebook)
+        notebook.add(tab1, text="🚀 Getting Started")
+        text1 = create_text_widget(tab1)
+        configure_text_tags(text1)
+        
+        getting_started = """Getting Started with Vehicle Painter
+
+Welcome to the Vehicle Painter for Cataclysm: Bright Nights! This tool allows you to create, edit, and customize vehicles with a visual, grid-based interface.
+
+QUICK START GUIDE
+
+1. LOAD OR CREATE A VEHICLE
+   • Click "Load Vehicle" to open an existing vehicle JSON file
+   • Click "New Vehicle" to start from scratch
+   • Vehicles are automatically centered at (0, 0) when loaded
+
+2. UNDERSTAND THE INTERFACE
+   • Left Panel: Palette, tools, and vehicle information
+   • Center Canvas: Your vehicle grid where you paint and edit
+   • Bottom Right: Zoom controls and recenter button
+   • Bottom Left: Coordinate display showing current mouse position
+
+3. PAINT YOUR FIRST TILE
+   • Select a palette entry (character) from the list
+   • Choose "Paint" tool from the Tools section
+   • Click or drag on the canvas to place parts and items
+
+4. SAVE YOUR WORK
+   • Click "Save Vehicle" to export your creation
+   • Files are saved in Cataclysm: Bright Nights JSON format
+   • Compatible with the game's vehicle system
+
+BASIC WORKFLOW
+
+The typical workflow is:
+1. Load or create a vehicle
+2. Select parts/items from the palette (or generate palette from vehicle)
+3. Use Paint tool to place them on the grid
+4. Use Edit Tile tool (middle-click) to fine-tune individual tiles
+5. Use Erase tool (right-click) to remove unwanted parts
+6. Save your vehicle
+
+COORDINATE SYSTEM
+
+• Grid coordinates are shown in the bottom-left corner as (x, y)
+• Origin (0, 0) is marked with red lines and a circle
+• The grid extends infinitely in all directions
+• Use arrow keys for precise navigation
+• Click "Recenter" to center your view on the vehicle or origin
+
+"""
+        text1.insert("1.0", getting_started)
+        text1.config(state=tk.DISABLED)
+        
+        # Tab 2: Tools & Features
+        tab2 = ttk.Frame(notebook)
+        notebook.add(tab2, text="🛠️ Tools & Features")
+        text2 = create_text_widget(tab2)
+        configure_text_tags(text2)
+        
+        tools_features = """Tools & Features Guide
+
+TOOLS OVERVIEW
+
+The application provides three main tools accessible from the Tools section in the left panel:
+
+PAINT TOOL (Default)
+   • Purpose: Place parts and items on the grid
+   • Usage: Click or drag to paint tiles
+   • Palette: Uses the currently selected palette character
+   • Behavior:
+     - Left-click: Place one tile
+     - Left-drag: Continuously place tiles as you drag
+     - Automatically creates parts/items based on palette definition
+   • Tip: The selected character in the palette determines what gets placed
+
+ERASE TOOL
+   • Purpose: Remove all parts and items from tiles
+   • Usage: Click or drag to erase tiles
+   • Behavior:
+     - Right-click: Erase one tile
+     - Right-drag: Continuously erase tiles as you drag
+     - Completely clears tiles (parts AND items)
+   • Keyboard: Right mouse button always erases, regardless of tool selection
+   • Warning: Erasing cannot be undone (though you can reload your save)
+
+EDIT TILE TOOL
+   • Purpose: Detailed editing of individual tiles
+   • Usage: Click on a tile to open the editor dialog
+   • Triggers:
+     - Middle-click on any tile
+     - Left-click when Edit Tile tool is selected
+     - Double-click a tile with the Paint tool
+   • Features:
+     - View all parts and items at that location
+     - Add new parts with specific properties
+     - Remove individual parts or items
+     - Edit fuel types for parts
+     - Edit item chances and groups
+     - Modify existing part configurations
+
+ZOOM CONTROLS
+
+Located in the bottom-right corner of the canvas:
+
+• Zoom Out (-): Decrease zoom level (minimum 50%)
+• Zoom Level Display: Shows current zoom percentage
+• Zoom In (+): Increase zoom level (maximum 400%)
+• Reset: Return to 100% zoom and recenter view
+• Recenter: Center view on vehicle or origin
+
+Keyboard Shortcuts:
+• Ctrl + Mouse Wheel: Zoom in/out at cursor position
+• Mouse Wheel: Scroll the canvas (when not holding Ctrl)
+
+VISUAL INDICATORS
+
+On the Canvas:
+• Light Blue Tiles: Contain vehicle parts or items
+• White Tiles: Empty grid cells
+• Green Plus (Top-Right): Tile contains items that spawn
+• Orange Plus (Bottom-Right): Tile contains multiple parts
+• Red Lines: X=0 and Y=0 axes
+• Red Circle: Origin point (0, 0)
+• Coordinate Display: Current mouse grid position (bottom-left)
+
+In the Palette:
+• Character: The symbol used to represent this configuration
+• Description: User-friendly name for the palette entry
+• Parts: List of vehicle parts included
+• Items: List of items/item groups that spawn
+
+COORDINATE DISPLAY
+
+The coordinate display in the bottom-left corner shows:
+• Current grid position of your mouse cursor
+• Format: (x, y) where x and y are grid coordinates
+• Updates in real-time as you move the mouse
+• Disappears when mouse leaves the canvas area
+
+"""
+        text2.insert("1.0", tools_features)
+        text2.config(state=tk.DISABLED)
+        
+        # Tab 3: Keyboard Shortcuts
+        tab3 = ttk.Frame(notebook)
+        notebook.add(tab3, text="⌨️ Keyboard Shortcuts")
+        text3 = create_text_widget(tab3)
+        configure_text_tags(text3)
+        
+        shortcuts = """Complete Keyboard Shortcuts Reference
+
+NAVIGATION SHORTCUTS
+
+Arrow Keys (Canvas must have focus)
+   ↑ Up Arrow:      Scroll view up by one grid cell
+   ↓ Down Arrow:    Scroll view down by one grid cell
+   ← Left Arrow:    Scroll view left by one grid cell
+   → Right Arrow:   Scroll view right by one grid cell
+   
+   Note: Click the canvas first to give it keyboard focus
+
+MOUSE SHORTCUTS
+
+Left Mouse Button:
+   • Click:         Place/paint tile (Paint tool) or edit tile (Edit tool)
+   • Drag:          Continuous painting or editing
+
+Middle Mouse Button:
+   • Click:         Always opens tile editor, regardless of selected tool
+   • Quick Edit:    Fastest way to edit a tile
+
+Right Mouse Button:
+   • Click:         Erase tile (always, regardless of selected tool)
+   • Drag:          Continuous erasing
+
+Mouse Wheel:
+   • Scroll:        Scroll canvas up/down (when not holding Ctrl)
+   • Ctrl + Scroll: Zoom in/out at cursor position
+
+KEYBOARD HOTKEYS FOR PALETTE
+
+When canvas has focus:
+   • Press any character key: Switch to that palette entry (if it exists)
+   • Automatically switches to Paint mode
+   • Only switches palette selection, doesn't place tile automatically
+
+Example:
+   1. Click canvas to give it focus
+   2. Press 'a' key → selects palette entry with character 'a'
+   3. Left-click to place that palette entry
+
+FILE OPERATIONS
+
+There are no keyboard shortcuts for file operations. Use the buttons:
+   • New Vehicle:    Creates a fresh vehicle
+   • Load Vehicle:   Opens file dialog to load JSON
+   • Save Vehicle:   Saves current vehicle to JSON
+   • Information Atlas: Opens this help dialog
+
+EFFICIENCY TIPS
+
+Fast Painting Workflow:
+   1. Use keyboard hotkeys to quickly switch palette entries
+   2. Hold left mouse button and drag for continuous painting
+   3. Use arrow keys to navigate while painting
+
+Fast Editing Workflow:
+   1. Use middle-click for instant tile editor
+   2. Use right-click drag for quick erasing
+   3. Use arrow keys for precise positioning
+
+Fast Navigation:
+   1. Use arrow keys for grid-aligned movement
+   2. Use mouse wheel for smooth scrolling
+   3. Use Recenter button to jump to vehicle/origin
+   4. Use Ctrl+wheel to zoom while keeping position centered
+
+"""
+        text3.insert("1.0", shortcuts)
+        text3.config(state=tk.DISABLED)
+        
+        # Tab 4: Palette System
+        tab4 = ttk.Frame(notebook)
+        notebook.add(tab4, text="🎨 Palette System")
+        text4 = create_text_widget(tab4)
+        configure_text_tags(text4)
+        
+        palette_info = """Palette System Guide
+
+UNDERSTANDING THE PALETTE
+
+The palette is the core of the painting system. Each character in the palette represents a specific configuration of vehicle parts and/or items.
+
+PALETTE ENTRIES
+
+Each palette entry contains:
+   • Character: Single character symbol (e.g., 'a', 'b', '1', '!')
+   • Description: Human-readable name
+   • Parts: List of vehicle parts (e.g., "frame", "wheel", "seat")
+   • Items: List of items or item groups that spawn at this location
+
+Example Palette Entry:
+   Character: 'f'
+   Description: "Frame"
+   Parts: frame
+   Items: (none)
+
+Another Example:
+   Character: 's'
+   Description: "Seat with items"
+   Parts: seat
+   Items: item:tool_belt, groups:tools
+
+GENERATING PALETTES
+
+Automatic Generation:
+   • When you load a vehicle, a palette is automatically generated
+   • Each unique part/item combination gets its own character
+   • Characters are assigned in order: a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z
+   • Then: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+   • Then: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+   • Then: !, @, #, $, %, ^, &, *, (, ), -, _, +, =, [, ], {, }, |, \\, :, ;, ", ', <, >, ?, /, ~, `
+
+Multi-Part Separation:
+   • When loading, you can choose to separate multi-part tiles
+   • If enabled, tiles with multiple parts become separate palette entries
+   • Allows individual editing of each part
+
+MANAGING PALETTES
+
+Loading Palettes:
+   • Click "Load Palette" to load a saved palette JSON file
+   • Palettes can be saved separately from vehicles
+   • Useful for creating reusable part configurations
+
+Saving Palettes:
+   • Click "Save Palette" to export your current palette
+   • Saves all palette entries with their configurations
+   • Can be loaded later for reuse
+
+Searching Palettes:
+   • Use the search box above the palette list
+   • Filters entries by character, description, or part/item names
+   • Case-insensitive search
+   • Real-time filtering as you type
+
+EDITING PALETTE ENTRIES
+
+To Edit an Entry:
+   1. Double-click any entry in the palette list
+   2. Or select an entry and click "Edit Palette Entry"
+
+Edit Dialog Options:
+   • Change character (must be unique)
+   • Edit description
+   • Modify parts list
+   • Modify items/item groups
+   • Add or remove elements
+
+Adding New Entries:
+   1. Click "Add Palette Entry" button
+   2. Choose a unique character
+   3. Define description, parts, and items
+   4. Save to add to palette
+
+USING THE PALETTE
+
+Selecting an Entry:
+   • Click on an entry in the palette list
+   • Or type the character key when canvas has focus
+   • Selected entry is highlighted
+
+Painting with Palette:
+   1. Select a palette entry
+   2. Choose Paint tool
+   3. Click or drag on canvas
+   4. Tiles are painted with that entry's configuration
+
+Keyboard Hotkeys:
+   • Press any character key to switch to that palette entry
+   • Automatically switches to Paint mode
+   • Speeds up workflow significantly
+
+TIPS FOR EFFICIENT PALETTE USE
+
+1. Organize your palette: Use descriptive names
+2. Use keyboard hotkeys: Much faster than clicking
+3. Search frequently: Find entries quickly
+4. Create templates: Save common configurations
+5. Separate complex tiles: Use multi-part separation for easier editing
+
+"""
+        text4.insert("1.0", palette_info)
+        text4.config(state=tk.DISABLED)
+        
+        # Tab 5: Tips & Tricks
+        tab5 = ttk.Frame(notebook)
+        notebook.add(tab5, text="💡 Tips & Tricks")
+        text5 = create_text_widget(tab5)
+        configure_text_tags(text5)
+        
+        tips_tricks = """Tips & Tricks for Efficient Vehicle Building
+
+GENERAL WORKFLOW TIPS
+
+1. START WITH A PLAN
+   • Sketch your vehicle layout on paper first
+   • Identify major components (frame, wheels, engine, etc.)
+   • Plan the general shape and structure
+
+2. USE THE ORIGIN AS REFERENCE
+   • Start building from (0, 0) or nearby
+   • Use origin markers (red lines) for alignment
+   • Keeps your vehicle organized and centered
+
+3. BUILD IN LAYERS
+   • Start with frame/base structure
+   • Add wheels and movement components
+   • Add functional parts (engine, seats, etc.)
+   • Add decorative/optional parts last
+
+PALETTE OPTIMIZATION
+
+1. CREATE COMMON TEMPLATES
+   • Save frequently used part combinations
+   • Reuse templates across multiple vehicles
+   • Example: "Standard Wheel" = wheel + frame corner
+
+2. USE DESCRIPTIVE NAMES
+   • Name palette entries clearly
+   • Makes searching easier
+   • Helps remember what each character represents
+
+3. ORGANIZE BY FUNCTION
+   • Group related palette entries together
+   • Use naming conventions (e.g., "wheel_front", "wheel_back")
+   • Makes large palettes manageable
+
+4. SEPARATE COMPLEX TILES
+   • Enable multi-part separation when loading
+   • Allows fine-tuning of individual parts
+   • Easier to edit later
+
+NAVIGATION EFFICIENCY
+
+1. USE ARROW KEYS FOR PRECISION
+   • Much more accurate than mouse scrolling
+   • Grid-aligned movement
+   • Essential for detailed work
+
+2. ZOOM FOR DETAIL WORK
+   • Zoom in (Ctrl+wheel) for precise placement
+   • Zoom out to see overall structure
+   • Use Reset button to quickly return to 100%
+
+3. USE RECENTER FREQUENTLY
+   • Quickly jump to vehicle center
+   • Find your vehicle if you get lost
+   • Useful after loading or large edits
+
+EDITING TECHNIQUES
+
+1. MIDDLE-CLICK FOR QUICK EDITS
+   • Fastest way to open tile editor
+   • No need to switch tools
+   • Works from any tool mode
+
+2. RIGHT-CLICK DRAG FOR CLEANUP
+   • Efficiently remove unwanted parts
+   • Great for fixing mistakes
+   • Continuous erasing saves time
+
+3. USE COORDINATE DISPLAY
+   • Know exactly where you are
+   • Plan tile placement precisely
+   • Helpful for symmetry and alignment
+
+4. INSPECT ORANGE INDICATORS
+   • Orange plus means multiple parts
+   • Often needs fine-tuning
+   • Use tile editor to verify configuration
+
+WORKFLOW SHORTCUTS
+
+Fast Painting:
+   1. Use keyboard hotkeys to switch palette entries
+   2. Hold left mouse and drag
+   3. Use arrow keys to navigate while painting
+
+Fast Editing:
+   1. Middle-click to edit tiles
+   2. Use keyboard shortcuts in dialog
+   3. Right-click drag to erase mistakes
+
+Fast Navigation:
+   1. Arrow keys for grid movement
+   2. Mouse wheel for smooth scrolling
+   3. Recenter button for jumping
+
+ADVANCED TECHNIQUES
+
+1. HOVER TOOLTIPS
+   • Get instant information without clicking
+   • See all parts and items at a glance
+   • Perfect for verification
+
+2. SEARCH FUNCTIONALITY
+   • Quickly find specific parts in palette
+   • Filter by part name, item name, or description
+   • Essential for large palettes
+
+3. MULTI-PART SEPARATION
+   • Separate complex tiles during loading
+   • Edit each part individually
+   • Recombine as needed
+
+4. COORDINATE PLANNING
+   • Plan symmetrical vehicles using coordinates
+   • Mirror parts across axes
+   • Use coordinate display for precision
+
+COMMON WORKFLOWS
+
+Building a New Vehicle:
+   1. New Vehicle → Name and ID
+   2. Build frame structure
+   3. Add wheels and engine
+   4. Add seats and storage
+   5. Add optional parts
+   6. Save vehicle
+
+Editing Existing Vehicle:
+   1. Load Vehicle → Select vehicle
+   2. Recenter view
+   3. Use middle-click to edit specific tiles
+   4. Use right-click to remove unwanted parts
+   5. Save changes
+
+Creating a Palette Template:
+   1. Build a vehicle with common configurations
+   2. Load it to generate palette
+   3. Save palette separately
+   4. Reuse palette for similar vehicles
+
+TROUBLESHOOTING
+
+If tiles aren't appearing:
+   • Check palette is loaded
+   • Verify Paint tool is selected
+   • Ensure a palette entry is selected
+
+If editing doesn't work:
+   • Make sure you're clicking on a tile with content
+   • Try middle-click instead of left-click
+   • Check tooltip to see what's at that location
+
+If coordinates seem wrong:
+   • Use Recenter button
+   • Check origin markers (red lines)
+   • Verify coordinate display matches expectations
+
+If palette isn't generating:
+   • Ensure vehicle file is valid JSON
+   • Check parts are properly formatted
+   • Try loading a known-good vehicle file
+
+"""
+        text5.insert("1.0", tips_tricks)
+        text5.config(state=tk.DISABLED)
+        
+        # Tab 6: File Formats
+        tab6 = ttk.Frame(notebook)
+        notebook.add(tab6, text="📁 File Formats")
+        text6 = create_text_widget(tab6)
+        configure_text_tags(text6)
+        
+        file_formats = """File Format Documentation
+
+VEHICLE JSON FORMAT
+
+Vehicles are saved in Cataclysm: Bright Nights JSON format. The structure is:
+
+{
+  "type": "vehicle",
+  "id": "vehicle_id_here",
+  "name": "Vehicle Name",
+  "parts": [
+    {
+      "part": "frame",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "part": "wheel",
+      "x": 1,
+      "y": 0
+    }
+  ],
+  "items": [
+    {
+      "item": "tool_belt",
+      "x": 0,
+      "y": 0,
+      "chance": 100
+    }
+  ],
+  "blueprint": {
+    "id": "vehicle_id_here",
+    "name": "Vehicle Name"
+  }
+}
+
+COORDINATE SYSTEM
+
+• Coordinates are integer values (x, y)
+• Grid-based positioning
+• Vehicles are normalized to start near (0, 0) when loaded
+• Negative coordinates are supported
+
+PART DEFINITIONS
+
+Simple Parts:
+{
+  "part": "frame",
+  "x": 0,
+  "y": 0
+}
+
+Parts with Fuel:
+{
+  "part": "engine",
+  "x": 0,
+  "y": 0,
+  "fuel": "gasoline"
+}
+
+Parts with Multiple Components:
+{
+  "part": "frame",
+  "x": 0,
+  "y": 0,
+  "parts": [
+    {"part": "frame"},
+    {"part": "wheel"}
+  ]
+}
+
+ITEM DEFINITIONS
+
+Items by Name:
+{
+  "item": "tool_belt",
+  "x": 0,
+  "y": 0
+}
+
+Items with Chance:
+{
+  "item": "rope",
+  "x": 0,
+  "y": 0,
+  "chance": 75
+}
+
+Item Groups:
+{
+  "item_groups": ["tools", "survival"],
+  "x": 0,
+  "y": 0
+}
+
+Combined:
+{
+  "item": "lighter",
+  "item_groups": ["tools"],
+  "x": 0,
+  "y": 0,
+  "chance": 50
+}
+
+PALETTE JSON FORMAT
+
+Palettes are saved separately and can be reused:
+
+{
+  "characters": {
+    "a": {
+      "description": "Frame",
+      "parts": ["frame"],
+      "items": []
+    },
+    "b": {
+      "description": "Wheel",
+      "parts": ["wheel"],
+      "items": []
+    }
+  },
+  "items": {
+    "s": {
+      "description": "Seat with tools",
+      "parts": ["seat"],
+      "items": [
+        {"item": "tool_belt"},
+        {"item_groups": ["survival"]}
+      ]
+    }
+  }
+}
+
+LOADING BEHAVIOR
+
+Multi-Vehicle Files:
+• If JSON contains array of vehicles, selection dialog appears
+• Shows vehicle name, ID, and part/item counts
+• Choose which vehicle to load
+
+Coordinate Normalization:
+• Vehicles automatically shifted to start at (0, 0)
+• Ensures consistent positioning
+• Original coordinates preserved in saved file
+
+Part Separation:
+• Option to separate multi-part tiles when loading
+• Each part becomes individual palette entry
+• Allows granular editing
+
+SAVING BEHAVIOR
+
+Export Format:
+• Matches Cataclysm: Bright Nights format
+• Includes export comment
+• Blueprint comes after parts/items
+• Proper JSON formatting with indentation
+
+File Structure:
+• Parts section first
+• Items section second
+• Blueprint section last
+• Comments added for clarity
+
+COMPATIBILITY
+
+The Vehicle Painter is designed to be compatible with:
+• Cataclysm: Bright Nights vehicle JSON files
+• Standard vehicle part names
+• Standard item IDs and item groups
+• Standard fuel types
+
+When loading vehicles:
+• Preserves all original data
+• Handles missing fields gracefully
+• Normalizes coordinates for editing
+• Maintains compatibility on save
+
+TIPS FOR FILE MANAGEMENT
+
+1. BACKUP YOUR WORK
+   • Save frequently
+   • Keep backup copies
+   • Version control for complex vehicles
+
+2. ORGANIZE FILES
+   • Use descriptive filenames
+   • Group related vehicles
+   • Save palettes separately
+
+3. VALIDATE BEFORE SAVING
+   • Check vehicle looks correct
+   • Verify all parts are placed
+   • Test in game if possible
+
+4. REUSE PALETTES
+   • Save common configurations
+   • Load palettes for similar vehicles
+   • Build a library of templates
+
+"""
+        text6.insert("1.0", file_formats)
+        text6.config(state=tk.DISABLED)
+        
+        # Search functionality
+        def search_text(search_term):
+            """Search through all tabs for the search term."""
+            if not search_term:
+                # Reset all tabs
+                for i in range(notebook.index("end")):
+                    tab = notebook.nametowidget(notebook.tabs()[i])
+                    if tab.winfo_children():
+                        text_frame = tab.winfo_children()[0]
+                        if text_frame.winfo_children():
+                            text_widget = text_frame.winfo_children()[1]
+                            text_widget.tag_remove("search_highlight", "1.0", tk.END)
+                return
+            
+            search_term_lower = search_term.lower()
+            found_any = False
+            
+            for i in range(notebook.index("end")):
+                tab = notebook.nametowidget(notebook.tabs()[i])
+                if not tab.winfo_children():
+                    continue
+                text_frame = tab.winfo_children()[0]
+                if not text_frame.winfo_children():
+                    continue
+                text_widget = text_frame.winfo_children()[1]
+                text_widget.tag_remove("search_highlight", "1.0", tk.END)
+                
+                content = text_widget.get("1.0", tk.END).lower()
+                if search_term_lower in content:
+                    found_any = True
+                    # Find and highlight matches
+                    start = "1.0"
+                    while True:
+                        pos = text_widget.search(search_term_lower, start, tk.END, nocase=True)
+                        if not pos:
+                            break
+                        end = f"{pos}+{len(search_term)}c"
+                        text_widget.tag_add("search_highlight", pos, end)
+                        start = end
+                    
+                    text_widget.tag_config("search_highlight", background="#FFEB3B", foreground="#000")
+                    
+                    if not found_any or notebook.select() != notebook.tabs()[i]:
+                        notebook.select(i)
+                        text_widget.see("1.0")
+                        # Scroll to first match
+                        first_match = text_widget.search(search_term_lower, "1.0", tk.END, nocase=True)
+                        if first_match:
+                            text_widget.see(first_match)
+                        break
+            
+            if not found_any:
+                notebook.select(0)  # Go to first tab if nothing found
+        
+        search_var.trace("w", lambda *args: search_text(search_var.get()))
         
         # Close button
-        button_frame = ttk.Frame(dialog)
-        button_frame.pack(pady=10)
+        button_frame = ttk.Frame(main_container)
+        button_frame.pack(fill=tk.X, pady=(10, 0))
         
-        ttk.Button(button_frame, text="Close", command=dialog.destroy).pack()
+        close_button = ttk.Button(button_frame, text="Close", command=dialog.destroy)
+        close_button.pack(side=tk.RIGHT)
         
         # Make dialog modal
         dialog.update_idletasks()

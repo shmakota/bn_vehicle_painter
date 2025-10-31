@@ -122,10 +122,10 @@ class Vehicle:
         # Generate blueprint if it doesn't exist or if we want to regenerate
         # Only include if we have parts
         # Blueprint comes AFTER parts in the JSON
+        # Always regenerate blueprint to ensure it matches current parts
         if self.parts:
-            # Use existing blueprint if it's manually set and non-empty, otherwise generate
-            if not self.blueprint:
-                self.blueprint = self.generate_blueprint()
+            # Always regenerate blueprint on export to ensure it reflects all current parts
+            self.blueprint = self.generate_blueprint()
             if self.blueprint:
                 result['blueprint'] = self.blueprint
         

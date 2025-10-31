@@ -420,7 +420,7 @@ class VehicleCanvas(tk.Canvas):
                 indicator_x + 3, indicator_y + 3,
                 fill="orange",
                 outline="darkorange",
-                tags=cell_id
+                tags=(cell_id, "cell")  # Include "cell" tag so it gets deleted on redraw
             )
     
     def draw_grid(self):

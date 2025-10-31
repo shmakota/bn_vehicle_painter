@@ -141,12 +141,30 @@ class VehiclePainterApp:
         # Store all palette entries for filtering
         self.all_palette_entries = []
         
-        # Edit button
+        # Edit, Add, Clear buttons frame
+        palette_action_frame = ttk.Frame(palette_frame)
+        palette_action_frame.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        palette_action_frame.columnconfigure(0, weight=1)
+        palette_action_frame.columnconfigure(1, weight=1)
+        palette_action_frame.columnconfigure(2, weight=1)
+        
         ttk.Button(
-            palette_frame,
+            palette_action_frame,
             text="Edit Selected",
             command=self.edit_palette_entry
-        ).grid(row=6, column=0, sticky=(tk.W, tk.E))
+        ).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        
+        ttk.Button(
+            palette_action_frame,
+            text="Add",
+            command=self.add_palette_entry
+        ).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        
+        ttk.Button(
+            palette_action_frame,
+            text="Clear",
+            command=self.clear_palette
+        ).grid(row=0, column=2, sticky=(tk.W, tk.E))
         
         # Tools frame
         tools_frame = ttk.LabelFrame(self.left_panel, text="Tools", padding="10")
@@ -522,6 +540,54 @@ class VehiclePainterApp:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save palette:\n{e}")
     
+    def clear_palette(self):
+        """Clear the current palette."""
+        if not self.palette:
+            messagebox.showwarning("No Palette", "No palette loaded to clear.")
+            return
+        
+        if messagebox.askyesno("Clear Palette", "Are you sure you want to clear the entire palette? This cannot be undone."):
+            self.palette.vehicle_part = {}
+            self.palette.items = {}
+            self.canvas.palette = self.palette
+            self.update_palette_display()
+            self.char_var.set("")
+            self.current_palette_char = None
+            self.canvas.current_palette_char = None
+            self.update_status("Palette cleared")
+    
+    def add_palette_entry(self):
+        """Add a new palette entry."""
+        # Create a new empty palette if none exists
+        if not self.palette:
+            self.palette = Palette()
+            self.canvas.palette = self.palette
+            self.palette_label.config(text="Palette: New")
+        
+        # Find an available character (skip ones already in use)
+        available_chars = []
+        # Start from 'A' for better readability, fall back to other chars if needed
+        search_order = [chr(i) for i in range(ord('A'), ord('Z') + 1)] + \
+                      [chr(i) for i in range(ord('a'), ord('z') + 1)] + \
+                      [chr(i) for i in range(ord('0'), ord('9') + 1)] + \
+                      [chr(i) for i in range(ord('!'), ord('~') + 1) if chr(i) not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789']
+        
+        for char in search_order:
+            # Check if character is already used
+            if char not in self.palette.vehicle_part and char not in self.palette.items:
+                available_chars.append(char)
+                if len(available_chars) >= 10:
+                    break
+        
+        if not available_chars:
+            messagebox.showerror("Error", "No available characters. Clear some palette entries first.")
+            return
+        
+        new_char = available_chars[0]
+        
+        # Use the existing edit dialog but with no existing definitions
+        self.edit_palette_entry_dialog(new_char, None, None)
+    
     def update_palette_display(self):
         """Update the palette listbox display."""
         # Store all entries
@@ -570,9 +636,15 @@ class VehiclePainterApp:
         part_def = self.palette.get_part_definition(char)
         item_def = self.palette.get_item_definition(char)
         
+        # Show edit dialog
+        self.edit_palette_entry_dialog(char, part_def, item_def)
+    
+    def edit_palette_entry_dialog(self, char, part_def, item_def):
+        """Show dialog to edit or add a palette entry."""
+        is_new = part_def is None and item_def is None
         # Create edit dialog
         edit_dialog = tk.Toplevel(self.root)
-        edit_dialog.title(f"Edit Palette Entry: {char}")
+        edit_dialog.title(f"{'Add' if is_new else 'Edit'} Palette Entry" + (f": {char}" if not is_new else ""))
         edit_dialog.transient(self.root)
         edit_dialog.geometry("500x500")
         
@@ -659,63 +731,105 @@ class VehiclePainterApp:
                 messagebox.showwarning("Invalid Input", "Character must be a single character.")
                 return
             
-            # Remove old character entry
-            if char != new_char and char in self.palette.vehicle_part:
-                del self.palette.vehicle_part[char]
-            if char != new_char and char in self.palette.items:
-                del self.palette.items[char]
+            # Remove old character entry if changing character
+            if not is_new and char != new_char:
+                if char in self.palette.vehicle_part:
+                    del self.palette.vehicle_part[char]
+                if char in self.palette.items:
+                    del self.palette.items[char]
+            
+            # Check if new character already exists
+            if new_char in self.palette.vehicle_part or new_char in self.palette.items:
+                if not messagebox.askyesno("Overwrite", f"Character '{new_char}' already exists. Overwrite?"):
+                    return
+                # Remove old entries
+                if new_char in self.palette.vehicle_part:
+                    del self.palette.vehicle_part[new_char]
+                if new_char in self.palette.items:
+                    del self.palette.items[new_char]
+            
+            # Validate that at least one definition is provided
+            part_name = part_var.get().strip() if part_type_var.get() != "none" else ""
+            parts_str = part_var.get().strip() if part_type_var.get() == "multiple" else ""
+            item_str = item_var.get().strip() if item_type_var.get() != "none" else ""
+            
+            if part_type_var.get() == "none" and item_type_var.get() == "none":
+                messagebox.showwarning("Empty Entry", "You must provide at least a part definition or item definition.")
+                return
             
             # Update part definition
             if part_type_var.get() == "none":
                 if new_char in self.palette.vehicle_part:
                     del self.palette.vehicle_part[new_char]
             elif part_type_var.get() == "single":
-                part_name = part_var.get().strip()
                 if part_name:
                     fuel = fuel_var.get().strip()
                     if fuel:
                         self.palette.vehicle_part[new_char] = {'part': part_name, 'fuel': fuel}
                     else:
                         self.palette.vehicle_part[new_char] = part_name
+                else:
+                    messagebox.showwarning("Invalid Input", "Part name is required for single part.")
+                    return
             elif part_type_var.get() == "multiple":
-                parts_str = part_var.get().strip()
                 if parts_str:
-                    parts_list = [p.strip() for p in parts_str.split(',')]
+                    parts_list = [p.strip() for p in parts_str.split(',') if p.strip()]
+                    if not parts_list:
+                        messagebox.showwarning("Invalid Input", "At least one part name is required.")
+                        return
                     fuel = fuel_var.get().strip()
                     if fuel:
                         self.palette.vehicle_part[new_char] = {'parts': parts_list, 'fuel': fuel}
                     else:
                         self.palette.vehicle_part[new_char] = {'parts': parts_list}
+                else:
+                    messagebox.showwarning("Invalid Input", "Part names are required for multiple parts.")
+                    return
             
             # Update item definition
             if item_type_var.get() == "none":
                 if new_char in self.palette.items:
                     del self.palette.items[new_char]
             else:
-                item_str = item_var.get().strip()
                 if item_str:
                     items_list = []
                     for part in item_str.split('|'):
                         part = part.strip()
+                        if not part:
+                            continue
                         item_entry = {}
                         if part.startswith('item:'):
-                            item_entry['item'] = part[5:].strip()
+                            item_name = part[5:].strip()
+                            if item_name:
+                                item_entry['item'] = item_name
                         elif part.startswith('groups:'):
-                            groups = [g.strip() for g in part[7:].split(',')]
-                            item_entry['item_groups'] = groups
+                            groups_str = part[7:].strip()
+                            if groups_str:
+                                groups = [g.strip() for g in groups_str.split(',') if g.strip()]
+                                if groups:
+                                    item_entry['item_groups'] = groups
                         if item_entry:
                             items_list.append(item_entry)
                     if items_list:
                         self.palette.items[new_char] = items_list
+                    else:
+                        messagebox.showwarning("Invalid Input", "Valid item or item group definitions are required.")
+                        return
+                else:
+                    messagebox.showwarning("Invalid Input", "Item definition is required when item type is selected.")
+                    return
             
             # Update canvas palette
             self.canvas.palette = self.palette
             
             # Refresh display
             self.update_palette_display()
+            self.char_var.set(new_char)
+            self.current_palette_char = new_char
+            self.canvas.current_palette_char = new_char
             
             edit_dialog.destroy()
-            self.update_status(f"Updated palette entry: {new_char}")
+            self.update_status(f"{'Added' if is_new else 'Updated'} palette entry: {new_char}")
         
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(pady=(10, 0))

@@ -1,0 +1,81 @@
+{
+    "type": "vehicle_palette",
+    "id": "boat_motor_single_palette",
+    "vehicle_part": {
+        "A": {
+            "parts": [
+                "alternator_bicycle",
+                "battery_motorbike",
+                "engine_1cyl_large",
+                "frame_horizontal",
+                "plastic_boat_hull"
+            ]
+        },
+        "B": {
+            "parts": [
+                "frame_cross",
+                "plastic_boat_hull",
+                "tank",
+                "trunk"
+            ]
+        },
+        "C": {
+            "parts": [
+                "controls",
+                "dashboard",
+                "frame_cross",
+                "plastic_boat_hull",
+                "seat",
+                "seatbelt"
+            ]
+        },
+        "D": {
+            "parts": [
+                "frame_cross",
+                "plastic_boat_hull",
+                "windshield"
+            ]
+        },
+        "E": {
+            "parts": [
+                "frame_vertical",
+                "plastic_boat_hull"
+            ]
+        },
+        "F": {
+            "parts": [
+                "frame_se",
+                "plastic_boat_hull"
+            ]
+        },
+        "G": {
+            "parts": [
+                "frame_ne",
+                "plastic_boat_hull"
+            ]
+        },
+        "H": {
+            "parts": [
+                "frame_sw",
+                "plastic_boat_hull"
+            ]
+        },
+        "I": {
+            "parts": [
+                "frame_nw",
+                "plastic_boat_hull"
+            ]
+        }
+    },
+    "items": {
+        "1": [
+            {
+                "item_groups": [
+                    "tools_survival",
+                    "tools_survival"
+                ],
+                "chance": 25
+            }
+        ]
+    }
+}

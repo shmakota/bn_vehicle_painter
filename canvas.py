@@ -184,7 +184,20 @@ class VehicleCanvas(tk.Canvas):
     def format_part_for_tooltip(self, part):
         """Format a part for tooltip display."""
         if 'parts' in part:
-            parts_str = ", ".join(part['parts'])
+            # Handle parts list - convert all items to strings
+            parts_list = []
+            for p in part['parts']:
+                if isinstance(p, str):
+                    parts_list.append(p)
+                elif isinstance(p, dict):
+                    # If it's a dict, try to extract meaningful info
+                    if 'part' in p:
+                        parts_list.append(p['part'])
+                    else:
+                        parts_list.append(str(p))
+                else:
+                    parts_list.append(str(p))
+            parts_str = ", ".join(parts_list)
             result = f"Parts: {parts_str}"
         elif 'part' in part:
             result = f"Part: {part['part']}"

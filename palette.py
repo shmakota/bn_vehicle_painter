@@ -121,8 +121,29 @@ class Palette:
             fuel = part.get('fuel')
             
             if 'parts' in part:
-                # Multiple parts
-                parts_list = sorted(part['parts'])
+                # Multiple parts - extract part names from the list
+                # Handle both string and dict formats
+                parts_names = []
+                for p in part['parts']:
+                    if isinstance(p, str):
+                        parts_names.append(p)
+                    elif isinstance(p, dict):
+                        # Extract part name from dict
+                        if 'part' in p:
+                            parts_names.append(p['part'])
+                        elif 'parts' in p:
+                            # Nested parts list - flatten it
+                            for nested_p in p['parts']:
+                                if isinstance(nested_p, str):
+                                    parts_names.append(nested_p)
+                                elif isinstance(nested_p, dict) and 'part' in nested_p:
+                                    parts_names.append(nested_p['part'])
+                
+                if not parts_names:
+                    # Skip if we couldn't extract any part names
+                    continue
+                
+                parts_list = sorted(parts_names)
                 part_key = tuple(parts_list)
                 if fuel:
                     part_key = part_key + (f"fuel:{fuel}",)

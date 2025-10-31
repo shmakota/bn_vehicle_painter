@@ -1,0 +1,184 @@
+{
+    "type": "vehicle_palette",
+    "id": "humvee_tow_palette",
+    "vehicle_part": {
+        "A": {
+            "parts": [
+                "hdframe_horizontal",
+                "plating_military"
+            ]
+        },
+        "B": {
+            "parts": [
+                "hdframe_horizontal_2",
+                "plating_military"
+            ]
+        },
+        "C": {
+            "parts": [
+                "hdframe_ne",
+                "hdhalfboard_ne",
+                "plating_military"
+            ]
+        },
+        "D": {
+            "parts": [
+                "wheel_armor",
+                "wheel_mount_heavy_steerable"
+            ]
+        },
+        "E": {
+            "parts": [
+                "hdframe_horizontal",
+                "hdhalfboard_horizontal",
+                "plating_military"
+            ]
+        },
+        "F": "headlight_reinforced",
+        "G": {
+            "parts": [
+                "alternator_truck",
+                "battery_car",
+                "diesel_engine_v8"
+            ]
+        },
+        "H": {
+            "parts": [
+                "hdframe_nw",
+                "hdhalfboard_nw",
+                "plating_military"
+            ]
+        },
+        "I": {
+            "parts": [
+                "hdframe_vertical",
+                "reinforced_windshield"
+            ]
+        },
+        "J": {
+            "parts": [
+                "hdframe_horizontal",
+                "reinforced_windshield"
+            ]
+        },
+        "K": {
+            "parts": [
+                "hddoor_right",
+                "hdframe_vertical"
+            ]
+        },
+        "L": {
+            "parts": [
+                "hdframe_vertical_2",
+                "hdroof",
+                "tank"
+            ]
+        },
+        "M": {
+            "parts": [
+                "seat",
+                "seatbelt"
+            ]
+        },
+        "N": {
+            "parts": [
+                "box",
+                "hdframe_vertical_2",
+                "hdroof",
+                "recharge_station"
+            ]
+        },
+        "O": {
+            "parts": [
+                "controls",
+                "dashboard",
+                "horn_big",
+                "vehicle_clock"
+            ]
+        },
+        "P": {
+            "parts": [
+                "hddoor_left",
+                "hdframe_vertical"
+            ]
+        },
+        "Q": {
+            "parts": [
+                "hdframe_horizontal_2",
+                "hdroof",
+                "seat",
+                "seatbelt"
+            ]
+        },
+        "R": {
+            "parts": [
+                "aisle_horizontal",
+                "hdframe_horizontal_2",
+                "hdroof"
+            ]
+        },
+        "S": {
+            "parts": [
+                "tow_launcher",
+                "turret_mount"
+            ]
+        },
+        "T": {
+            "parts": [
+                "hdboard_vertical",
+                "hdframe_vertical",
+                "plating_military"
+            ]
+        },
+        "U": {
+            "parts": [
+                "hdframe_horizontal_2",
+                "hdroof",
+                "trunk"
+            ]
+        },
+        "V": {
+            "parts": [
+                "hdboard_se",
+                "hdframe_se",
+                "plating_military",
+                "wheel_armor",
+                "wheel_mount_heavy"
+            ]
+        },
+        "W": {
+            "parts": [
+                "hddoor_trunk",
+                "hdframe_horizontal",
+                "plating_military"
+            ]
+        },
+        "X": {
+            "parts": [
+                "hddoor_trunk",
+                "hdframe_horizontal",
+                "muffler",
+                "plating_military"
+            ]
+        },
+        "Y": {
+            "parts": [
+                "hdboard_sw",
+                "hdframe_sw",
+                "plating_military",
+                "wheel_armor",
+                "wheel_mount_heavy"
+            ]
+        }
+    },
+    "items": {
+        "1": [
+            {
+                "item_groups": [
+                    "fuel_diesel"
+                ],
+                "chance": 5
+            }
+        ]
+    }
+}

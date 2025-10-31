@@ -1,0 +1,152 @@
+{
+    "type": "vehicle_palette",
+    "id": "plane_small_palette",
+    "vehicle_part": {
+        "A": {
+            "parts": [
+                "black_box",
+                "controls",
+                "dashboard",
+                "roof",
+                "seat",
+                "seatbelt",
+                "wing_metal_horizontal",
+                "xlframe_cross"
+            ]
+        },
+        "B": {
+            "parts": [
+                "tank",
+                "windshield_vertical_right",
+                "wing_metal_horizontal",
+                "xlframe_vertical"
+            ]
+        },
+        "C": "wing_metal_external_horizontal",
+        "D": "lit_wing_metal_external_right",
+        "E": {
+            "parts": [
+                "tank",
+                "windshield_vertical_left",
+                "wing_metal_horizontal",
+                "xlframe_vertical"
+            ]
+        },
+        "F": "lit_wing_metal_external_left",
+        "G": {
+            "parts": [
+                "windshield_horizontal_front",
+                "xlframe_cross"
+            ]
+        },
+        "H": {
+            "parts": [
+                "windshield_ne",
+                "xlframe_vertical"
+            ]
+        },
+        "I": {
+            "parts": [
+                "windshield_nw",
+                "xlframe_vertical"
+            ]
+        },
+        "J": {
+            "parts": [
+                "alternator_car",
+                "battery_car",
+                "engine_inline4",
+                "halfboard_horizontal_front",
+                "headlight",
+                "wheel_mount_light_steerable",
+                "wheel_small",
+                "xlframe_horizontal"
+            ]
+        },
+        "K": {
+            "parts": [
+                "halfboard_ne",
+                "xlframe_ne"
+            ]
+        },
+        "L": {
+            "parts": [
+                "halfboard_nw",
+                "xlframe_nw"
+            ]
+        },
+        "M": "propeller_metal",
+        "N": {
+            "parts": [
+                "roof",
+                "seat",
+                "seatbelt",
+                "xlframe_cross"
+            ]
+        },
+        "O": {
+            "parts": [
+                "door_vertical_right",
+                "wheel_mount_light",
+                "wheel_small",
+                "windshield_vertical_right",
+                "xlframe_vertical"
+            ]
+        },
+        "P": {
+            "parts": [
+                "door_vertical_left",
+                "wheel_mount_light",
+                "wheel_small",
+                "xlframe_vertical"
+            ]
+        },
+        "Q": {
+            "parts": [
+                "roof",
+                "trunk",
+                "xlframe_cross"
+            ]
+        },
+        "R": {
+            "parts": [
+                "halfboard_vertical_right",
+                "xlframe_vertical"
+            ]
+        },
+        "S": {
+            "parts": [
+                "halfboard_vertical_left",
+                "xlframe_vertical"
+            ]
+        },
+        "T": {
+            "parts": [
+                "windshield_horizontal_rear",
+                "xlframe_cross"
+            ]
+        },
+        "U": {
+            "parts": [
+                "halfboard_se",
+                "xlframe_vertical"
+            ]
+        },
+        "V": {
+            "parts": [
+                "halfboard_sw",
+                "xlframe_vertical"
+            ]
+        },
+        "W": {
+            "parts": [
+                "halfboard_vertical",
+                "xlframe_cross"
+            ]
+        },
+        "X": "lit_wing_metal_external_horizontal",
+        "Y": "wing_metal_external_right",
+        "Z": "wing_metal_external_left"
+    },
+    "items": {}
+}

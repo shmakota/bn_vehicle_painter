@@ -1,0 +1,16 @@
+{
+    "id": "motorcycle_cross",
+    "type": "vehicle",
+    "name": "Motocross Bike",
+    "parts": [
+      {"x": 2, "y": 0, "parts": ["frame_vertical_2", "wheel_mount_light_steerable", "wheel_motorbike_or"]},
+      {"x": 1, "y": 0, "parts": ["frame_vertical", {"part": "tank_small", "fuel": "gasoline"}, "saddle_motor", "controls", "battery_motorbike_small", "engine_1cyl_large", "alternator_motorbike"]},
+      {"x": 0, "y": 0, "parts": ["xlframe_vertical", "muffler", "wheel_mount_light", "wheel_motorbike_or_rear"]}
+    ]
+,
+    "blueprint": [
+      ["###"]
+    ]
+,
+    "//": "exported with vehicle painter"
+}

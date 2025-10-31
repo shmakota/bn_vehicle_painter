@@ -1,0 +1,71 @@
+{
+    "type": "vehicle_palette",
+    "id": "flatbed_truck_palette",
+    "vehicle_part": {
+        "A": "frame_vertical",
+        "B": "box",
+        "C": "roof",
+        "D": "frame_vertical_2",
+        "E": "seat",
+        "F": "seatbelt",
+        "G": "controls",
+        "H": "dashboard",
+        "I": "vehicle_alarm",
+        "J": "horn_car",
+        "K": "door",
+        "L": "frame_horizontal",
+        "M": "windshield",
+        "N": "halfboard_horizontal",
+        "O": "frame_cover",
+        "P": "halfboard_cover",
+        "Q": "engine_v6",
+        "R": "alternator_truck",
+        "S": "battery_car",
+        "T": "frame_nw",
+        "U": "halfboard_nw",
+        "V": "headlight",
+        "W": {
+            "parts": [
+                "wheel_mount_medium_steerable",
+                "wheel_wide"
+            ]
+        },
+        "X": "frame_ne",
+        "Y": "halfboard_ne",
+        "Z": "frame_sw",
+        "[": "board_sw",
+        "\\": {
+            "part": "tank",
+            "fuel": "gasoline"
+        },
+        "]": "frame_se",
+        "^": "board_se",
+        "_": "cargo_space",
+        "`": "halfboard_vertical",
+        "a": {
+            "parts": [
+                "wheel_mount_medium",
+                "wheel_wide"
+            ]
+        },
+        "b": "beeper"
+    },
+    "items": {
+        "1": [
+            {
+                "item_groups": [
+                    "car_kit"
+                ],
+                "chance": 7
+            }
+        ],
+        "2": [
+            {
+                "item_groups": [
+                    "hardware"
+                ],
+                "chance": 2
+            }
+        ]
+    }
+}

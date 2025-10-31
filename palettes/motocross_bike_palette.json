@@ -1,0 +1,33 @@
+{
+    "type": "vehicle_palette",
+    "id": "motorcycle_cross_palette",
+    "vehicle_part": {
+        "A": {
+            "parts": [
+                "frame_vertical_2",
+                "wheel_motorbike_or",
+                "wheel_mount_light_steerable"
+            ]
+        },
+        "B": {
+            "parts": [
+                "alternator_motorbike",
+                "battery_motorbike_small",
+                "controls",
+                "engine_1cyl_large",
+                "frame_vertical",
+                "saddle_motor",
+                "tank_small"
+            ]
+        },
+        "C": {
+            "parts": [
+                "muffler",
+                "wheel_motorbike_or_rear",
+                "wheel_mount_light",
+                "xlframe_vertical"
+            ]
+        }
+    },
+    "items": {}
+}

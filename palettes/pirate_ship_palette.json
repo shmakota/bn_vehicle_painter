@@ -1,0 +1,254 @@
+{
+    "type": "vehicle_palette",
+    "id": "pirate_ship_palette",
+    "vehicle_part": {
+        "A": {
+            "parts": [
+                "boat_board",
+                "frame_wood_horizontal",
+                "plating_wood",
+                "woodboard_horizontal"
+            ]
+        },
+        "B": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "roof_wood",
+                "wood box"
+            ]
+        },
+        "C": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "roof_wood",
+                "wooden_aisle_vertical"
+            ]
+        },
+        "D": {
+            "parts": [
+                "boat_board",
+                "door_wood_opaque",
+                "frame_wood_horizontal"
+            ]
+        },
+        "E": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "wooden_aisle_vertical"
+            ]
+        },
+        "F": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "sail_large",
+                "seat_wood"
+            ]
+        },
+        "G": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "wood box"
+            ]
+        },
+        "H": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "mounted_pirate_flag",
+                "wooden_aisle_vertical"
+            ]
+        },
+        "I": {
+            "parts": [
+                "boat_board",
+                "frame_wood_horizontal",
+                "plating_wood",
+                "woodhalfboard_horizontal"
+            ]
+        },
+        "J": "ram_wood",
+        "K": {
+            "parts": [
+                "boat_board",
+                "frame_wood_horizontal",
+                "woodboard_horizontal"
+            ]
+        },
+        "L": {
+            "parts": [
+                "boat_board",
+                "frame_wood_sw",
+                "plating_wood",
+                "woodhalfboard_sw"
+            ]
+        },
+        "M": {
+            "parts": [
+                "boat_board",
+                "frame_wood_ne",
+                "plating_wood",
+                "woodhalfboard_ne"
+            ]
+        },
+        "N": {
+            "parts": [
+                "boat_board",
+                "frame_wood_se",
+                "plating_wood",
+                "woodboard_se"
+            ]
+        },
+        "O": {
+            "parts": [
+                "boat_board",
+                "frame_wood_nw",
+                "plating_wood",
+                "woodboard_nw"
+            ]
+        },
+        "P": {
+            "parts": [
+                "bed",
+                "boat_board",
+                "frame_wood_vertical",
+                "roof_wood"
+            ]
+        },
+        "Q": {
+            "parts": [
+                "boat_board",
+                "frame_wood_horizontal",
+                "wooden_aisle_vertical"
+            ]
+        },
+        "R": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "mounted_3in_ordnance_rifle",
+                "turret_mount_manual_wood",
+                "wood box"
+            ]
+        },
+        "S": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "plating_wood",
+                "woodboard_vertical"
+            ]
+        },
+        "T": {
+            "parts": [
+                "boat_board",
+                "frame_wood_ne",
+                "plating_wood",
+                "woodboard_ne"
+            ]
+        },
+        "U": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "plating_wood",
+                "woodhalfboard_vertical"
+            ]
+        },
+        "V": {
+            "parts": [
+                "boat_board",
+                "door_wood",
+                "frame_wood_vertical",
+                "plating_wood"
+            ]
+        },
+        "W": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "roof_wood",
+                "seat_wood"
+            ]
+        },
+        "X": {
+            "parts": [
+                "boat_board",
+                "frame_wood_se",
+                "plating_wood",
+                "woodhalfboard_se"
+            ]
+        },
+        "Y": {
+            "parts": [
+                "boat_board",
+                "frame_wood_nw",
+                "plating_wood",
+                "woodhalfboard_nw"
+            ]
+        },
+        "Z": {
+            "parts": [
+                "boat_board",
+                "frame_wood_sw",
+                "plating_wood",
+                "woodboard_sw"
+            ]
+        },
+        "[": {
+            "parts": [
+                "boat_board",
+                "frame_wood_vertical",
+                "roof_wood",
+                "veh_table_wood"
+            ]
+        }
+    },
+    "items": {
+        "1": [
+            {
+                "item_groups": [
+                    "supplies_cannonball"
+                ],
+                "chance": 50
+            }
+        ],
+        "2": [
+            {
+                "item_groups": [
+                    "supplies_ship_rigging"
+                ],
+                "chance": 100
+            }
+        ],
+        "3": [
+            {
+                "item_groups": [
+                    "supplies_powder_mag"
+                ],
+                "chance": 100
+            }
+        ],
+        "4": [
+            {
+                "item_groups": [
+                    "supplies_naval_cache"
+                ],
+                "chance": 100
+            }
+        ],
+        "5": [
+            {
+                "item_groups": [
+                    "jewelry_safe",
+                    "jewelry_safe"
+                ],
+                "chance": 75
+            }
+        ]
+    }
+}

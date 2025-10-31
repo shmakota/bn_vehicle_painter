@@ -1,0 +1,92 @@
+{
+    "type": "vehicle_palette",
+    "id": "car_palette",
+    "vehicle_part": {
+        "A": "frame_vertical_2",
+        "B": "reclining_seat",
+        "C": "seatbelt",
+        "D": "controls",
+        "E": "dashboard",
+        "F": "vehicle_clock",
+        "G": "vehicle_alarm",
+        "H": "stereo",
+        "I": "horn_car",
+        "J": "roof",
+        "K": "frame_vertical",
+        "L": "door_front_left",
+        "M": "door_front_right",
+        "N": "seat",
+        "O": "door_rear_left",
+        "P": "door_rear_right",
+        "Q": "frame_horizontal",
+        "R": "windshield_horizontal_front",
+        "S": "windshield_nw",
+        "T": "windshield_ne",
+        "U": "halfboard_horizontal_front",
+        "V": "engine_inline4",
+        "W": "alternator_car",
+        "X": "battery_car",
+        "Y": "frame_nw",
+        "Z": "halfboard_nw",
+        "[": {
+            "parts": [
+                "wheel",
+                "wheel_mount_medium_steerable"
+            ]
+        },
+        "\\": "headlight",
+        "]": "frame_ne",
+        "^": "halfboard_ne",
+        "_": "trunk",
+        "`": "muffler",
+        "a": "halfboard_vertical_left",
+        "b": {
+            "part": "tank",
+            "fuel": "gasoline"
+        },
+        "c": "halfboard_vertical_right",
+        "d": "halfboard_sw",
+        "e": {
+            "parts": [
+                "wheel",
+                "wheel_mount_medium"
+            ]
+        },
+        "f": "door_trunk",
+        "g": "halfboard_se"
+    },
+    "items": {
+        "1": [
+            {
+                "item_groups": [
+                    "car_misc"
+                ],
+                "chance": 14
+            }
+        ],
+        "2": [
+            {
+                "item_groups": [
+                    "snacks"
+                ],
+                "chance": 5
+            }
+        ],
+        "3": [
+            {
+                "item_groups": [
+                    "fast_food"
+                ],
+                "chance": 2
+            }
+        ],
+        "4": [
+            {
+                "item_groups": [
+                    "car_kit"
+                ],
+                "chance": 11
+            }
+        ]
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "id": "plane_small",
+    "type": "vehicle",
+    "name": "Small 2-seater Plane",
+    "parts": [
+      {"x": 7, "y": 4, "parts": ["xlframe_cross", "seat", "seatbelt", "controls", "dashboard", "black_box", "roof", "wing_metal_horizontal"]},
+      {"x": 7, "y": 5, "parts": ["xlframe_vertical", "windshield_vertical_right", {"part": "tank", "fuel": "avgas"}, "wing_metal_horizontal"]},
+      {"x": 7, "y": 6, "parts": ["wing_metal_external_horizontal"]},
+      {"x": 7, "y": 7, "parts": ["wing_metal_external_horizontal"]},
+      {"x": 7, "y": 8, "parts": ["lit_wing_metal_external_right"]},
+      {"x": 7, "y": 3, "parts": ["xlframe_vertical", "windshield_vertical_left", {"part": "tank", "fuel": "avgas"}, "wing_metal_horizontal"]},
+      {"x": 7, "y": 2, "parts": ["wing_metal_external_horizontal"]},
+      {"x": 7, "y": 1, "parts": ["wing_metal_external_horizontal"]},
+      {"x": 7, "y": 0, "parts": ["lit_wing_metal_external_left"]},
+      {"x": 8, "y": 4, "parts": ["xlframe_cross", "windshield_horizontal_front"]},
+      {"x": 8, "y": 5, "parts": ["xlframe_vertical", "windshield_ne"]},
+      {"x": 8, "y": 3, "parts": ["xlframe_vertical", "windshield_nw"]},
+      {"x": 9, "y": 4, "parts": ["xlframe_horizontal", "halfboard_horizontal_front", "engine_inline4", "alternator_car", "battery_car", "headlight", "wheel_mount_light_steerable", "wheel_small"]},
+      {"x": 9, "y": 5, "parts": ["xlframe_ne", "halfboard_ne"]},
+      {"x": 9, "y": 3, "parts": ["xlframe_nw", "halfboard_nw"]},
+      {"x": 10, "y": 4, "parts": ["propeller_metal"]},
+      {"x": 6, "y": 4, "parts": ["xlframe_cross", "seat", "seatbelt", "roof"]},
+      {"x": 6, "y": 5, "parts": ["xlframe_vertical", "windshield_vertical_right", "door_vertical_right", "wheel_mount_light", "wheel_small"]},
+      {"x": 6, "y": 3, "parts": ["xlframe_vertical", "door_vertical_left", "wheel_mount_light", "wheel_small"]},
+      {"x": 5, "y": 4, "parts": ["xlframe_cross", "trunk", "roof"]},
+      {"x": 5, "y": 5, "parts": ["xlframe_vertical", "halfboard_vertical_right"]},
+      {"x": 5, "y": 3, "parts": ["xlframe_vertical", "halfboard_vertical_left"]},
+      {"x": 4, "y": 4, "parts": ["xlframe_cross", "windshield_horizontal_rear"]},
+      {"x": 4, "y": 5, "parts": ["xlframe_vertical", "halfboard_se"]},
+      {"x": 4, "y": 3, "parts": ["xlframe_vertical", "halfboard_sw"]},
+      {"x": 3, "y": 4, "parts": ["xlframe_cross", "halfboard_vertical"]},
+      {"x": 2, "y": 4, "parts": ["xlframe_cross", "halfboard_vertical"]},
+      {"x": 1, "y": 4, "parts": ["xlframe_cross", "halfboard_vertical"]},
+      {"x": 0, "y": 4, "parts": ["lit_wing_metal_external_horizontal"]},
+      {"x": 0, "y": 5, "parts": ["wing_metal_external_right"]},
+      {"x": 0, "y": 3, "parts": ["wing_metal_external_left"]}
+    ]
+,
+    "items": [
+      {"x": 5, "y": 4, "chance": 50, "items": ["lighter"]},
+      {"x": 5, "y": 4, "chance": 50, "items": ["duct_tape"]},
+      {"x": 5, "y": 4, "chance": 50, "items": ["flashlight"]},
+      {"x": 5, "y": 4, "chance": 25, "items": ["caff_gum"]},
+      {"x": 5, "y": 4, "chance": 10, "items": ["gum"]},
+      {"x": 5, "y": 4, "chance": 10, "items": ["nic_gum"]},
+      {"x": 5, "y": 4, "chance": 5, "items": ["roadmap"]}
+    ]
+,
+    "blueprint": [
+      ["       #   "],
+      ["       #   "],
+      ["       #   "],
+      ["#   ###### "],
+      ["###########"],
+      ["#   ###### "],
+      ["       #   "],
+      ["       #   "],
+      ["       #   "]
+    ]
+,
+    "//": "exported with vehicle painter"
+}

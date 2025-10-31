@@ -105,8 +105,15 @@ class Palette:
         return sorted(chars)
     
     @classmethod
-    def generate_from_vehicle(cls, vehicle, palette_id="auto_generated"):
-        """Generate a palette from an existing vehicle by analyzing its parts."""
+    def generate_from_vehicle(cls, vehicle, palette_id="auto_generated", separate_parts=False):
+        """Generate a palette from an existing vehicle by analyzing its parts.
+        
+        Args:
+            vehicle: Vehicle object to generate palette from
+            palette_id: ID for the generated palette
+            separate_parts: If True, separate multi-part tiles into individual parts.
+                          If False, keep multi-part tiles as combined entries.
+        """
         palette = cls()
         palette.palette_type = "vehicle_palette"
         palette.palette_id = palette_id
@@ -143,53 +150,107 @@ class Palette:
                     # Skip if we couldn't extract any part names
                     continue
                 
-                parts_list = sorted(parts_names)
-                part_key = tuple(parts_list)
-                if fuel:
-                    part_key = part_key + (f"fuel:{fuel}",)
+                if separate_parts:
+                    # Separate each part into its own palette entry
+                    for single_part_name in parts_names:
+                        part_key = (single_part_name,)
+                        if fuel:
+                            part_key = part_key + (f"fuel:{fuel}",)
+                        
+                        if part_key not in part_configs:
+                            # Assign a character
+                            if char_counter > ord('Z'):
+                                if char_counter > ord('z'):
+                                    char_num = char_counter - ord('z') - 1
+                                    if char_num < 10:
+                                        char = chr(ord('0') + char_num)
+                                    else:
+                                        char = chr(ord('!') + (char_num - 10))
+                                else:
+                                    char = chr(char_counter)
+                            else:
+                                char = chr(char_counter)
+                            
+                            part_configs[part_key] = char
+                            char_counter += 1
+                            
+                            # Create palette entry for single part
+                            fuel_value = next((k.split(':')[1] for k in part_key if 'fuel:' in str(k)), None)
+                            if fuel_value:
+                                palette.vehicle_part[char] = {'part': single_part_name, 'fuel': fuel_value}
+                            else:
+                                palette.vehicle_part[char] = single_part_name
+                else:
+                    # Keep multiple parts together (original behavior)
+                    parts_list = sorted(parts_names)
+                    part_key = tuple(parts_list)
+                    if fuel:
+                        part_key = part_key + (f"fuel:{fuel}",)
+                    
+                    if part_key not in part_configs:
+                        # Assign a character
+                        if char_counter > ord('Z'):
+                            if char_counter > ord('z'):
+                                char_num = char_counter - ord('z') - 1
+                                if char_num < 10:
+                                    char = chr(ord('0') + char_num)
+                                else:
+                                    char = chr(ord('!') + (char_num - 10))
+                            else:
+                                char = chr(char_counter)
+                        else:
+                            char = chr(char_counter)
+                        
+                        part_configs[part_key] = char
+                        char_counter += 1
+                        
+                        # Create palette entry
+                        has_fuel = any('fuel:' in str(k) for k in part_key)
+                        parts_list_clean = [p for p in part_key if not str(p).startswith('fuel:')]
+                        fuel_value = next((k.split(':')[1] for k in part_key if 'fuel:' in str(k)), None)
+                        
+                        if len(parts_list_clean) == 1:
+                            # Single part
+                            if fuel_value:
+                                palette.vehicle_part[char] = {'part': parts_list_clean[0], 'fuel': fuel_value}
+                            else:
+                                palette.vehicle_part[char] = parts_list_clean[0]
+                        else:
+                            # Multiple parts
+                            palette.vehicle_part[char] = {'parts': parts_list_clean}
+                            if fuel_value:
+                                palette.vehicle_part[char]['fuel'] = fuel_value
             elif part_name:
                 # Single part
                 part_key = (part_name,)
                 if fuel:
                     part_key = part_key + (f"fuel:{fuel}",)
-            else:
-                continue
-            
-            if part_key not in part_configs:
-                # Assign a character
-                if char_counter > ord('Z'):
-                    # Use lowercase if we run out
-                    if char_counter > ord('z'):
-                        # Use numbers
-                        char_num = char_counter - ord('z') - 1
-                        if char_num < 10:
-                            char = chr(ord('0') + char_num)
+                
+                if part_key not in part_configs:
+                    # Assign a character
+                    if char_counter > ord('Z'):
+                        if char_counter > ord('z'):
+                            char_num = char_counter - ord('z') - 1
+                            if char_num < 10:
+                                char = chr(ord('0') + char_num)
+                            else:
+                                char = chr(ord('!') + (char_num - 10))
                         else:
-                            char = chr(ord('!') + (char_num - 10))
+                            char = chr(char_counter)
                     else:
                         char = chr(char_counter)
-                else:
-                    char = chr(char_counter)
-                
-                part_configs[part_key] = char
-                char_counter += 1
-                
-                # Create palette entry
-                has_fuel = any('fuel:' in str(k) for k in part_key)
-                parts_list = [p for p in part_key if not str(p).startswith('fuel:')]
-                fuel_value = next((k.split(':')[1] for k in part_key if 'fuel:' in str(k)), None)
-                
-                if len(parts_list) == 1:
-                    # Single part
+                    
+                    part_configs[part_key] = char
+                    char_counter += 1
+                    
+                    # Create palette entry
+                    fuel_value = next((k.split(':')[1] for k in part_key if 'fuel:' in str(k)), None)
                     if fuel_value:
-                        palette.vehicle_part[char] = {'part': parts_list[0], 'fuel': fuel_value}
+                        palette.vehicle_part[char] = {'part': part_name, 'fuel': fuel_value}
                     else:
-                        palette.vehicle_part[char] = parts_list[0]
-                else:
-                    # Multiple parts
-                    palette.vehicle_part[char] = {'parts': parts_list}
-                    if fuel_value:
-                        palette.vehicle_part[char]['fuel'] = fuel_value
+                        palette.vehicle_part[char] = part_name
+            else:
+                continue
         
         # Analyze items (simpler - group by item/item_groups)
         item_configs = {}

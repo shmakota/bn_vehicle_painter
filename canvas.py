@@ -4,18 +4,20 @@ Canvas widget for vehicle painting and editing.
 
 import tkinter as tk
 from math import sqrt, floor
+import hashlib
 from tile_editor import TileEditorDialog
 
 
 class VehicleCanvas(tk.Canvas):
     """Custom canvas for vehicle painting."""
     
-    def __init__(self, parent, vehicle, tool_var, current_palette_char=None, palette=None, **kwargs):
+    def __init__(self, parent, vehicle, tool_var, current_palette_char=None, palette=None, char_var=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.vehicle = vehicle
         self.tool_var = tool_var
         self.current_palette_char = current_palette_char
         self.palette = palette
+        self.char_var = char_var  # Reference to main app's char_var for UI updates
         
         # Grid settings
         self.grid_size = 20  # Pixels per grid cell
@@ -37,12 +39,31 @@ class VehicleCanvas(tk.Canvas):
         self.current_hover_tile = None
         self.tooltip_window = None
         
+        # Track mouse position for keyboard hotkeys
+        self.last_mouse_x = 0
+        self.last_mouse_y = 0
+        self.last_mouse_grid = (0, 0)
+        
+        # Part color mapping for visual distinction
+        self.part_colors = {}  # part_name -> color
+        
+        # Color palette for parts (bright, distinguishable colors)
+        self.color_palette = [
+            "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+            "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#EC7063",
+            "#52BE80", "#5DADE2", "#F1948A", "#85C1E9", "#F5B041",
+            "#82E0AA", "#AED6F1", "#F4D03F", "#A569BD", "#48C9B0"
+        ]
+        
         # Bind events
         self.bind("<Button-1>", self.on_click)
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<ButtonRelease-1>", self.on_release)
         self.bind("<Configure>", self.on_resize)
-        self.bind("<Button-3>", self.on_right_click)  # Right-click for tile editor
+        self.bind("<Button-2>", self.on_middle_click)  # Middle-click for tile editor
+        self.bind("<Button-3>", self.on_right_click)  # Right-click for erase
+        self.bind("<B3-Motion>", self.on_right_drag)  # Right-drag for continuous erase
+        self.bind("<ButtonRelease-3>", self.on_right_release)  # Right-click release
         self.bind("<Motion>", self.on_motion)  # Mouse motion for tooltip
         self.bind("<Leave>", self.on_leave)  # Hide tooltip when mouse leaves
         
@@ -83,7 +104,49 @@ class VehicleCanvas(tk.Canvas):
         self.is_drawing = True
     
     def on_right_click(self, event):
-        """Handle right-click - open tile editor."""
+        """Handle right-click - erase tile."""
+        # Focus canvas for keyboard input
+        self.focus_set()
+        
+        # Hide tooltip when clicking
+        self.hide_tooltip()
+        
+        x, y = self.canvasx(event.x), self.canvasy(event.y)
+        grid_x, grid_y = self.screen_to_grid(x, y)
+        
+        # Erase the tile
+        self.erase_cell(grid_x, grid_y)
+        
+        self.last_x = grid_x
+        self.last_y = grid_y
+        self.is_drawing = True
+    
+    def on_right_drag(self, event):
+        """Handle right-click drag - continuous erase."""
+        if not self.is_drawing:
+            return
+        
+        # Hide tooltip while dragging
+        self.hide_tooltip()
+        
+        x, y = self.canvasx(event.x), self.canvasy(event.y)
+        grid_x, grid_y = self.screen_to_grid(x, y)
+        
+        # Only erase if moved to a new cell
+        if grid_x != self.last_x or grid_y != self.last_y:
+            self.erase_cell(grid_x, grid_y)
+            
+            self.last_x = grid_x
+            self.last_y = grid_y
+    
+    def on_right_release(self, event):
+        """Handle right-click release."""
+        self.is_drawing = False
+        self.last_x = None
+        self.last_y = None
+    
+    def on_middle_click(self, event):
+        """Handle middle-click - open tile editor."""
         x, y = self.canvasx(event.x), self.canvasy(event.y)
         grid_x, grid_y = self.screen_to_grid(x, y)
         self.open_tile_editor(grid_x, grid_y)
@@ -126,6 +189,11 @@ class VehicleCanvas(tk.Canvas):
         x, y = self.canvasx(event.x), self.canvasy(event.y)
         grid_x, grid_y = self.screen_to_grid(x, y)
         
+        # Track mouse position for keyboard hotkeys
+        self.last_mouse_x = x
+        self.last_mouse_y = y
+        self.last_mouse_grid = (grid_x, grid_y)
+        
         # Check if we're hovering over a different tile
         if (grid_x, grid_y) != self.current_hover_tile:
             self.current_hover_tile = (grid_x, grid_y)
@@ -137,49 +205,75 @@ class VehicleCanvas(tk.Canvas):
         self.current_hover_tile = None
     
     def on_key_press(self, event):
-        """Handle keyboard input for arrow key navigation."""
-        # Only handle arrow keys
-        if event.keysym not in ['Up', 'Down', 'Left', 'Right']:
+        """Handle keyboard input for arrow key navigation and palette hotkeys."""
+        # Handle arrow keys for navigation
+        if event.keysym in ['Up', 'Down', 'Left', 'Right']:
+            # Get current scroll position
+            scroll_x = self.xview()[0]  # Returns (left, right) fraction
+            scroll_y = self.yview()[0]
+            
+            # Get scroll region
+            scroll_region = self.cget("scrollregion")
+            if not scroll_region:
+                return
+            
+            region = scroll_region.split()
+            region_min_x = float(region[0])
+            region_min_y = float(region[1])
+            region_max_x = float(region[2])
+            region_max_y = float(region[3])
+            region_width = region_max_x - region_min_x
+            region_height = region_max_y - region_min_y
+            
+            # Calculate one grid cell in scroll coordinates
+            # One grid cell = grid_size pixels
+            cell_scroll_x = (self.grid_size / region_width)
+            cell_scroll_y = (self.grid_size / region_height)
+            
+            # Update scroll position based on arrow key
+            if event.keysym == 'Up':
+                new_y = max(0.0, scroll_y - cell_scroll_y)
+                self.yview_moveto(new_y)
+            elif event.keysym == 'Down':
+                new_y = min(1.0, scroll_y + cell_scroll_y)
+                self.yview_moveto(new_y)
+            elif event.keysym == 'Left':
+                new_x = max(0.0, scroll_x - cell_scroll_x)
+                self.xview_moveto(new_x)
+            elif event.keysym == 'Right':
+                new_x = min(1.0, scroll_x + cell_scroll_x)
+                self.xview_moveto(new_x)
+            
+            # Redraw grid after scrolling
+            self.after_idle(self.draw_grid)
             return
         
-        # Get current scroll position
-        scroll_x = self.xview()[0]  # Returns (left, right) fraction
-        scroll_y = self.yview()[0]
-        
-        # Get scroll region
-        scroll_region = self.cget("scrollregion")
-        if not scroll_region:
+        # Handle palette hotkeys - check if key matches a palette character
+        if not self.palette:
             return
         
-        region = scroll_region.split()
-        region_min_x = float(region[0])
-        region_min_y = float(region[1])
-        region_max_x = float(region[2])
-        region_max_y = float(region[3])
-        region_width = region_max_x - region_min_x
-        region_height = region_max_y - region_min_y
+        # Get the character from the key press
+        char = event.char
+        if not char or len(char) != 1:
+            return
         
-        # Calculate one grid cell in scroll coordinates
-        # One grid cell = grid_size pixels
-        cell_scroll_x = (self.grid_size / region_width)
-        cell_scroll_y = (self.grid_size / region_height)
+        # Check if this character exists in the palette
+        if char not in self.palette.vehicle_part and char not in self.palette.items:
+            return
         
-        # Update scroll position based on arrow key
-        if event.keysym == 'Up':
-            new_y = max(0.0, scroll_y - cell_scroll_y)
-            self.yview_moveto(new_y)
-        elif event.keysym == 'Down':
-            new_y = min(1.0, scroll_y + cell_scroll_y)
-            self.yview_moveto(new_y)
-        elif event.keysym == 'Left':
-            new_x = max(0.0, scroll_x - cell_scroll_x)
-            self.xview_moveto(new_x)
-        elif event.keysym == 'Right':
-            new_x = min(1.0, scroll_x + cell_scroll_x)
-            self.xview_moveto(new_x)
+        # Switch to this palette character and automatically switch to paint mode
+        self.current_palette_char = char
         
-        # Redraw grid after scrolling
-        self.after_idle(self.draw_grid)
+        # Switch to paint tool automatically
+        if self.tool_var:
+            self.tool_var.set("paint")
+        
+        # Update UI if char_var is available
+        if self.char_var:
+            try:
+                self.char_var.set(char)
+            except:
+                pass
     
     def format_part_for_tooltip(self, part):
         """Format a part for tooltip display."""
@@ -246,7 +340,37 @@ class VehicleCanvas(tk.Canvas):
             lines.append("")
             lines.append("Parts:")
             for part in parts:
-                lines.append(f"  • {self.format_part_for_tooltip(part)}")
+                # Expand multi-part entries to show each part separately
+                if 'parts' in part:
+                    # Extract individual part names
+                    parts_list = []
+                    for p in part['parts']:
+                        if isinstance(p, str):
+                            parts_list.append(p)
+                        elif isinstance(p, dict):
+                            if 'part' in p:
+                                parts_list.append(p['part'])
+                            elif 'parts' in p:
+                                # Nested parts - flatten
+                                for nested_p in p['parts']:
+                                    if isinstance(nested_p, str):
+                                        parts_list.append(nested_p)
+                                    elif isinstance(nested_p, dict) and 'part' in nested_p:
+                                        parts_list.append(nested_p['part'])
+                    
+                    # Show each part separately
+                    for part_name in parts_list:
+                        part_line = f"  • Part: {part_name}"
+                        if 'fuel' in part:
+                            part_line += f" | Fuel: {part['fuel']}"
+                        lines.append(part_line)
+                elif 'part' in part:
+                    part_line = f"  • Part: {part['part']}"
+                    if 'fuel' in part:
+                        part_line += f" | Fuel: {part['fuel']}"
+                    lines.append(part_line)
+                else:
+                    lines.append(f"  • {self.format_part_for_tooltip(part)}")
         
         if items:
             lines.append("")
@@ -347,12 +471,13 @@ class VehicleCanvas(tk.Canvas):
         for item in items:
             self.vehicle.add_item(item)
         
-        # Update display and tooltip if hovering
-        self.redraw()
+        # Force redraw of this specific cell to update colors
+        self.draw_cell(grid_x, grid_y)
+        
+        # Update tooltip if hovering over this tile
         if self.current_hover_tile == (grid_x, grid_y):
-            # Update tooltip if we're hovering over this tile
+            self.show_tooltip(grid_x, grid_y, 0, 0)  # Position will be updated on next motion
             self.update_idletasks()
-            # Tooltip will update on next motion event
     
     def erase_cell(self, grid_x, grid_y):
         """Erase all parts and items at the given grid coordinates."""
@@ -376,10 +501,13 @@ class VehicleCanvas(tk.Canvas):
         for i in reversed(items_to_remove):
             self.vehicle.remove_item(i)
         
-        # Update display and hide tooltip if we're on this tile
-        self.redraw()
+        # Force redraw of this specific cell to update colors
+        self.draw_cell(grid_x, grid_y)
+        
+        # Update tooltip if hovering over this tile
         if self.current_hover_tile == (grid_x, grid_y):
-            self.hide_tooltip()
+            self.show_tooltip(grid_x, grid_y, 0, 0)  # Position will be updated on next motion
+            self.update_idletasks()
     
     def open_tile_editor(self, grid_x, grid_y):
         """Open the tile editor for the given coordinates."""
@@ -390,11 +518,35 @@ class VehicleCanvas(tk.Canvas):
         
         TileEditorDialog(self.winfo_toplevel(), self.vehicle, grid_x, grid_y, update_canvas, self.palette)
     
+    def get_part_color(self, part_name):
+        """Get a consistent color for a part type."""
+        if part_name not in self.part_colors:
+            # Generate consistent color based on part name hash
+            hash_obj = hashlib.md5(part_name.encode())
+            hash_int = int(hash_obj.hexdigest(), 16)
+            color_idx = hash_int % len(self.color_palette)
+            self.part_colors[part_name] = self.color_palette[color_idx]
+        return self.part_colors[part_name]
+    
+    def get_primary_part_name(self, part):
+        """Get the primary part name from a part definition."""
+        if 'part' in part:
+            return part['part']
+        elif 'parts' in part:
+            # For multiple parts, use the first one
+            parts_list = part['parts']
+            if parts_list:
+                if isinstance(parts_list[0], str):
+                    return parts_list[0]
+                elif isinstance(parts_list[0], dict) and 'part' in parts_list[0]:
+                    return parts_list[0]['part']
+        return None
+    
     def draw_cell(self, grid_x, grid_y):
         """Draw a single cell based on vehicle parts."""
         x, y = self.grid_to_screen(grid_x, grid_y)
         
-        # Remove existing cell drawing
+        # Remove existing cell drawing (delete all items with this cell_id tag)
         cell_id = f"cell_{grid_x}_{grid_y}"
         self.delete(cell_id)
         
@@ -403,10 +555,10 @@ class VehicleCanvas(tk.Canvas):
         items = self.vehicle.get_items_at(grid_x, grid_y)
         
         if parts or items:
-            # Has content - use light blue
-            fill_color = "#ADD8E6"
-            outline_color = "#4169E1"
-            width = 2
+            # Light blue tile for parts/items
+            fill_color = "#ADD8E6"  # Light blue
+            outline_color = "lightgray"
+            width = 1
         else:
             # Empty cell
             fill_color = "white"
@@ -423,17 +575,71 @@ class VehicleCanvas(tk.Canvas):
             tags=(cell_id, "cell")
         )
         
-        # Draw indicator if multiple parts
-        if len(parts) > 1:
-            # Draw a small indicator for multiple parts
-            indicator_x = x + self.grid_size - 5
-            indicator_y = y + 2
-            self.create_oval(
-                indicator_x - 3, indicator_y - 3,
-                indicator_x + 3, indicator_y + 3,
-                fill="orange",
-                outline="darkorange",
-                tags=(cell_id, "cell")  # Include "cell" tag so it gets deleted on redraw
+        # Draw indicators: green plus for items (top-right), orange plus for multiple parts (bottom-right)
+        if items:
+            # Green plus in top-right corner for items
+            plus_x = x + self.grid_size - 6
+            plus_y = y + 6
+            # Draw outline first (slightly offset in all directions)
+            for offset_x, offset_y in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                self.create_text(
+                    plus_x + offset_x, plus_y + offset_y,
+                    text="+",
+                    fill="#000000",  # Black outline
+                    font=("Arial", 10, "bold"),
+                    anchor=tk.CENTER,
+                    tags=(cell_id, "cell")
+                )
+            # Draw the green plus on top
+            self.create_text(
+                plus_x, plus_y,
+                text="+",
+                fill="#00FF00",  # Green
+                font=("Arial", 10, "bold"),
+                anchor=tk.CENTER,
+                tags=(cell_id, "cell")
+            )
+        
+        # Count total number of individual parts (including parts in "parts" lists)
+        total_part_count = 0
+        for part in parts:
+            if 'parts' in part:
+                # Count parts in the list
+                parts_list = part['parts']
+                for p in parts_list:
+                    if isinstance(p, str):
+                        total_part_count += 1
+                    elif isinstance(p, dict):
+                        if 'part' in p:
+                            total_part_count += 1
+                        elif 'parts' in p:
+                            # Nested parts - count them too
+                            total_part_count += len([n for n in p['parts'] if isinstance(n, str) or (isinstance(n, dict) and 'part' in n)])
+            elif 'part' in part:
+                total_part_count += 1
+        
+        if total_part_count > 1:
+            # Orange plus in bottom-right corner for multiple parts
+            plus_x = x + self.grid_size - 6
+            plus_y = y + self.grid_size - 6
+            # Draw outline first (slightly offset in all directions)
+            for offset_x, offset_y in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                self.create_text(
+                    plus_x + offset_x, plus_y + offset_y,
+                    text="+",
+                    fill="#FFFFFF",  # White outline
+                    font=("Arial", 10, "bold"),
+                    anchor=tk.CENTER,
+                    tags=(cell_id, "cell")
+                )
+            # Draw the orange plus on top
+            self.create_text(
+                plus_x, plus_y,
+                text="+",
+                fill="#FFA500",  # Orange
+                font=("Arial", 10, "bold"),
+                anchor=tk.CENTER,
+                tags=(cell_id, "cell")
             )
     
     def draw_grid(self):

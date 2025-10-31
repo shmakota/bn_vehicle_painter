@@ -107,11 +107,62 @@ class TileEditorDialog:
         self.parts_listbox.delete(0, tk.END)
         self.part_indices = []
         
+        # Track expanded parts (parts that have "parts" list need to be expanded)
+        expanded_parts = {}  # original_index -> list of expanded part data
+        
         for i, part in enumerate(self.vehicle.parts):
             if part.get('x') == self.x and part.get('y') == self.y:
-                part_str = self.format_part(part)
-                self.parts_listbox.insert(tk.END, part_str)
-                self.part_indices.append(i)
+                if 'parts' in part:
+                    # Expand multi-part entry into individual parts
+                    parts_list = part['parts']
+                    fuel = part.get('fuel')
+                    
+                    # Extract part names - handle both string and dict formats
+                    part_names = []
+                    for p in parts_list:
+                        if isinstance(p, str):
+                            part_names.append(p)
+                        elif isinstance(p, dict):
+                            if 'part' in p:
+                                part_names.append(p['part'])
+                            elif 'parts' in p:
+                                # Nested parts - flatten
+                                for nested_p in p['parts']:
+                                    if isinstance(nested_p, str):
+                                        part_names.append(nested_p)
+                                    elif isinstance(nested_p, dict) and 'part' in nested_p:
+                                        part_names.append(nested_p['part'])
+                    
+                    # Store expanded parts info for removal
+                    expanded_parts[i] = {
+                        'parts': part_names,
+                        'fuel': fuel,
+                        'original': part
+                    }
+                    
+                    # Show each part separately
+                    for part_name in part_names:
+                        part_str = f"Part: {part_name}"
+                        if fuel:
+                            part_str += f" | Fuel: {fuel}"
+                        self.parts_listbox.insert(tk.END, part_str)
+                        # Store the original index and part name for removal
+                        self.part_indices.append({
+                            'index': i,
+                            'part_name': part_name,
+                            'is_expanded': True
+                        })
+                else:
+                    # Single part - display normally
+                    part_str = self.format_part(part)
+                    self.parts_listbox.insert(tk.END, part_str)
+                    self.part_indices.append({
+                        'index': i,
+                        'is_expanded': False
+                    })
+        
+        # Store expanded parts info for removal operations
+        self.expanded_parts = expanded_parts
         
         if not self.part_indices:
             self.parts_listbox.insert(tk.END, "(No parts at this tile)")
@@ -176,17 +227,70 @@ class TileEditorDialog:
         
         idx = selection[0]
         if idx < len(self.part_indices):
-            part_index = self.part_indices[idx]
-            # Remove from vehicle (need to find current index since list changes)
-            actual_parts = self.vehicle.get_parts_at(self.x, self.y)
-            if idx < len(actual_parts):
-                # Find the actual index in vehicle.parts
-                target_part = actual_parts[idx]
-                for i, p in enumerate(self.vehicle.parts):
-                    if p is target_part:
-                        self.vehicle.remove_part(i)
-                        break
+            part_info = self.part_indices[idx]
             
+            if isinstance(part_info, dict):
+                if part_info.get('is_expanded'):
+                    # This is an expanded part from a multi-part entry
+                    original_index = part_info['index']
+                    part_name_to_remove = part_info['part_name']
+                    
+                    # Get the original part
+                    original_part = self.vehicle.parts[original_index]
+                    if 'parts' in original_part:
+                        # Remove the specific part from the list
+                        parts_list = original_part['parts']
+                        
+                        # Remove the part (handle both string and dict formats)
+                        new_parts_list = []
+                        for p in parts_list:
+                            should_keep = True
+                            if isinstance(p, str):
+                                if p == part_name_to_remove:
+                                    should_keep = False
+                            elif isinstance(p, dict):
+                                if 'part' in p and p['part'] == part_name_to_remove:
+                                    should_keep = False
+                                elif 'parts' in p:
+                                    # Nested parts - check and filter
+                                    nested_list = []
+                                    for nested_p in p['parts']:
+                                        if isinstance(nested_p, str):
+                                            if nested_p != part_name_to_remove:
+                                                nested_list.append(nested_p)
+                                        elif isinstance(nested_p, dict) and 'part' in nested_p:
+                                            if nested_p['part'] != part_name_to_remove:
+                                                nested_list.append(nested_p)
+                                        else:
+                                            nested_list.append(nested_p)
+                                    if nested_list:
+                                        p = p.copy()
+                                        p['parts'] = nested_list
+                                    else:
+                                        should_keep = False
+                            
+                            if should_keep:
+                                new_parts_list.append(p)
+                        
+                        if new_parts_list:
+                            # Update the part with remaining parts
+                            original_part['parts'] = new_parts_list
+                        else:
+                            # No parts left - remove the entire entry
+                            self.vehicle.remove_part(original_index)
+                    else:
+                        # This shouldn't happen, but fallback to normal removal
+                        self.vehicle.remove_part(original_index)
+                else:
+                    # Normal single part
+                    part_index = part_info['index']
+                    self.vehicle.remove_part(part_index)
+            else:
+                # Legacy format (for backwards compatibility)
+                part_index = part_info
+                self.vehicle.remove_part(part_index)
+            
+            # Reload tile data to reflect changes
             self.load_tile_data()
             if self.canvas_update_callback:
                 self.canvas_update_callback()
@@ -221,11 +325,25 @@ class TileEditorDialog:
             return
         
         idx = selection[0]
-        actual_parts = self.vehicle.get_parts_at(self.x, self.y)
-        if idx >= len(actual_parts):
+        if idx >= len(self.part_indices):
             return
         
-        part = actual_parts[idx]
+        part_info = self.part_indices[idx]
+        
+        # Get the actual part to edit
+        if isinstance(part_info, dict):
+            if part_info.get('is_expanded'):
+                # For expanded parts, edit the original multi-part entry
+                original_index = part_info['index']
+                part = self.vehicle.parts[original_index]
+            else:
+                # Normal single part
+                part_index = part_info['index']
+                part = self.vehicle.parts[part_index]
+        else:
+            # Legacy format
+            part_index = part_info
+            part = self.vehicle.parts[part_index]
         
         # Create dialog for fuel input
         fuel_dialog = tk.Toplevel(self.dialog)

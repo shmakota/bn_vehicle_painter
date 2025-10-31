@@ -267,6 +267,7 @@ class VehiclePainterApp:
             tool_var=self.tool_var,
             current_palette_char=self.current_palette_char,
             palette=self.palette,
+            char_var=self.char_var,  # Pass char_var for keyboard hotkey updates
             width=800,
             height=600,
             bg="white"
@@ -919,8 +920,20 @@ class VehiclePainterApp:
                 self.canvas.vehicle = self.vehicle
                 
                 # Generate palette automatically from vehicle
+                # Ask user if they want to separate multi-part tiles
+                separate_parts = messagebox.askyesno(
+                    "Palette Generation",
+                    "Separate multi-part tiles into individual parts?\n\n"
+                    "Yes: Each part gets its own palette entry\n"
+                    "No: Multi-part tiles stay combined"
+                )
+                
                 try:
-                    auto_palette = Palette.generate_from_vehicle(self.vehicle, f"{self.vehicle.id}_palette")
+                    auto_palette = Palette.generate_from_vehicle(
+                        self.vehicle, 
+                        f"{self.vehicle.id}_palette",
+                        separate_parts=separate_parts
+                    )
                     self.palette = auto_palette
                     self.canvas.palette = auto_palette
                     

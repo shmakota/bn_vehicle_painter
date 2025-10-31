@@ -145,35 +145,35 @@ class Vehicle:
         
         for part in self.parts:
             if 'x' in part:
-                all_x.append(part['x'])
+                all_x.append(int(part['x']))  # Ensure integer
             if 'y' in part:
-                all_y.append(part['y'])
+                all_y.append(int(part['y']))  # Ensure integer
         
         for item in self.items:
             if 'x' in item:
-                all_x.append(item['x'])
+                all_x.append(int(item['x']))  # Ensure integer
             if 'y' in item:
-                all_y.append(item['y'])
+                all_y.append(int(item['y']))  # Ensure integer
         
         if not all_x or not all_y:
             return
         
         # Find minimum coordinates
-        min_x = min(all_x)
-        min_y = min(all_y)
+        min_x = int(min(all_x))  # Ensure integer
+        min_y = int(min(all_y))  # Ensure integer
         
         # Shift all coordinates to start from (0, 0)
         for part in self.parts:
             if 'x' in part:
-                part['x'] -= min_x
+                part['x'] = int(part['x']) - min_x  # Ensure result is integer
             if 'y' in part:
-                part['y'] -= min_y
+                part['y'] = int(part['y']) - min_y  # Ensure result is integer
         
         for item in self.items:
             if 'x' in item:
-                item['x'] -= min_x
+                item['x'] = int(item['x']) - min_x  # Ensure result is integer
             if 'y' in item:
-                item['y'] -= min_y
+                item['y'] = int(item['y']) - min_y  # Ensure result is integer
     
     @classmethod
     def from_dict(cls, data):
@@ -185,6 +185,20 @@ class Vehicle:
         vehicle.parts = data.get('parts', [])
         vehicle.items = data.get('items', [])
         vehicle.blueprint = data.get('blueprint', [])
+        
+        # Ensure all coordinates are integers (JSON might load them as floats)
+        for part in vehicle.parts:
+            if 'x' in part:
+                part['x'] = int(part['x'])
+            if 'y' in part:
+                part['y'] = int(part['y'])
+        
+        for item in vehicle.items:
+            if 'x' in item:
+                item['x'] = int(item['x'])
+            if 'y' in item:
+                item['y'] = int(item['y'])
+        
         # Don't preserve comment from loaded files - it will be added on export
         # Normalize coordinates to align with grid
         vehicle.normalize_coordinates()

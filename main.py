@@ -273,14 +273,46 @@ class VehiclePainterApp:
             bg="white"
         )
         self.canvas.tile_editor_callback = self.update_parts_count
+        self.canvas.zoom_callback = self.update_zoom_label
         
-        # Add recenter button on canvas frame (bottom right)
+        # Add zoom and recenter buttons on canvas frame (bottom right)
+        button_frame = ttk.Frame(canvas_frame)
+        self.zoom_out_button = ttk.Button(
+            button_frame,
+            text="−",
+            command=self.zoom_out,
+            width=3
+        )
+        self.zoom_out_button.pack(side=tk.LEFT, padx=2)
+        
+        self.zoom_label = ttk.Label(button_frame, text="100%")
+        self.zoom_label.pack(side=tk.LEFT, padx=2)
+        
+        self.zoom_in_button = ttk.Button(
+            button_frame,
+            text="+",
+            command=self.zoom_in,
+            width=3
+        )
+        self.zoom_in_button.pack(side=tk.LEFT, padx=2)
+        
+        self.reset_zoom_button = ttk.Button(
+            button_frame,
+            text="Reset",
+            command=self.reset_zoom,
+            width=6
+        )
+        self.reset_zoom_button.pack(side=tk.LEFT, padx=2)
+        
         self.recenter_button = ttk.Button(
-            canvas_frame,
+            button_frame,
             text="Recenter",
             command=self.recenter_view
         )
+        self.recenter_button.pack(side=tk.LEFT, padx=2)
+        
         self.recenter_canvas_frame = canvas_frame
+        self.button_frame = button_frame
         # Position will be set after canvas is configured
         
         scrollbar_v = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self.canvas_scroll_vertical)
@@ -343,28 +375,50 @@ class VehiclePainterApp:
         self.separator_dragging = False
         
     def position_recenter_button(self):
-        """Position the recenter button in the bottom right corner of the canvas."""
+        """Position the zoom/recenter buttons in the bottom right corner of the canvas."""
         def update_position():
             # Get canvas frame dimensions (not canvas widget, but the frame containing it)
             frame_width = self.recenter_canvas_frame.winfo_width()
             frame_height = self.recenter_canvas_frame.winfo_height()
             if frame_width > 1 and frame_height > 1:
-                # Get button dimensions
-                self.recenter_button.update_idletasks()
-                btn_width = self.recenter_button.winfo_width() or 80
-                btn_height = self.recenter_button.winfo_height() or 25
+                # Get button frame dimensions
+                self.button_frame.update_idletasks()
+                btn_width = self.button_frame.winfo_width() or 200
+                btn_height = self.button_frame.winfo_height() or 25
                 
                 # Position in bottom right with some padding (account for scrollbar)
                 # Scrollbar is 17px wide, so subtract that from available width
                 x = frame_width - btn_width - 25  # Extra padding for scrollbar area
                 y = frame_height - btn_height - 25  # Padding from bottom
                 
-                self.recenter_button.place(x=x, y=y)
+                self.button_frame.place(x=x, y=y)
         
         # Update position after canvas is configured
         self.root.after_idle(update_position)
         # Also update when canvas frame resizes
         self.recenter_canvas_frame.bind("<Configure>", lambda e: update_position())
+    
+    def zoom_in(self):
+        """Zoom in on the canvas."""
+        self.canvas.zoom_in()
+        self.update_zoom_label()
+    
+    def zoom_out(self):
+        """Zoom out on the canvas."""
+        self.canvas.zoom_out()
+        self.update_zoom_label()
+    
+    def reset_zoom(self):
+        """Reset zoom to 100% and recenter view."""
+        self.canvas.reset_zoom()
+        self.update_zoom_label()
+        # Recenter after resetting zoom
+        self.root.after_idle(self.recenter_view)
+    
+    def update_zoom_label(self):
+        """Update the zoom percentage label."""
+        zoom_percent = int(self.canvas.zoom_level * 100)
+        self.zoom_label.config(text=f"{zoom_percent}%")
     
     def recenter_view(self):
         """Recenter the canvas view on the vehicle or origin, properly centered in viewport."""
@@ -385,15 +439,9 @@ class VehiclePainterApp:
                 center_x = (min_x + max_x) / 2.0
                 center_y = (min_y + max_y) / 2.0
                 
-                # Convert grid coordinates to canvas coordinates
+                # Convert grid coordinates to canvas coordinates (grid_size may be float)
                 target_canvas_x = center_x * self.canvas.grid_size
                 target_canvas_y = center_y * self.canvas.grid_size
-                
-                # We want this point to be in the center of the viewport
-                # The viewport center should show target_canvas_x, target_canvas_y
-                # Current viewport shows from (view_x1, view_y1) to (view_x2, view_y2)
-                # We want: (view_x1 + view_x2)/2 = target_canvas_x
-                # And: (view_y1 + view_y2)/2 = target_canvas_y
                 
                 # Get scroll region
                 scroll_region = self.canvas.cget("scrollregion")
@@ -407,10 +455,17 @@ class VehiclePainterApp:
                     region_height = region_max_y - region_min_y
                     
                     # Calculate scroll position to center the target point
-                    # Scroll position is a fraction (0.0 to 1.0) of the scrollable area
-                    # We want: target_x - canvas_width/2 = region_min_x + scroll_x * region_width
-                    scroll_x = (target_canvas_x - canvas_width / 2 - region_min_x) / region_width
-                    scroll_y = (target_canvas_y - canvas_height / 2 - region_min_y) / region_height
+                    # The viewport's left edge should be positioned so the center shows target_canvas_x
+                    # left_edge = target_canvas_x - canvas_width / 2
+                    # scroll_x represents where the left edge is as a fraction of the scrollable area
+                    # left_edge = region_min_x + scroll_x * (region_width - canvas_width)
+                    # But Tkinter's xview_moveto uses a simpler model:
+                    # The viewport shows from (region_min_x + scroll_x * region_width) to (region_min_x + scroll_x * region_width + canvas_width)
+                    # For the center to be at target_x:
+                    # target_x = region_min_x + scroll_x * region_width + canvas_width / 2
+                    # scroll_x = (target_x - region_min_x - canvas_width / 2) / region_width
+                    scroll_x = (target_canvas_x - region_min_x - canvas_width / 2) / region_width
+                    scroll_y = (target_canvas_y - region_min_y - canvas_height / 2) / region_height
                     
                     # Clamp to valid range
                     scroll_x = max(0.0, min(1.0, scroll_x))
@@ -438,8 +493,9 @@ class VehiclePainterApp:
                 region_height = region_max_y - region_min_y
                 
                 # Center origin (0, 0) in viewport
-                scroll_x = (0 - canvas_width / 2 - region_min_x) / region_width
-                scroll_y = (0 - canvas_height / 2 - region_min_y) / region_height
+                # Using the same calculation as above
+                scroll_x = (0 - region_min_x - canvas_width / 2) / region_width
+                scroll_y = (0 - region_min_y - canvas_height / 2) / region_height
                 
                 scroll_x = max(0.0, min(1.0, scroll_x))
                 scroll_y = max(0.0, min(1.0, scroll_y))

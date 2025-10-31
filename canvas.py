@@ -6,6 +6,7 @@ import tkinter as tk
 from math import sqrt, floor
 import hashlib
 from tile_editor import TileEditorDialog
+from tileset import TilesetLoader
 
 
 class VehicleCanvas(tk.Canvas):
@@ -18,9 +19,14 @@ class VehicleCanvas(tk.Canvas):
         self.current_palette_char = current_palette_char
         self.palette = palette
         self.char_var = char_var  # Reference to main app's char_var for UI updates
+        self.zoom_callback = None  # Callback for zoom updates (e.g., to update UI label)
         
         # Grid settings
-        self.grid_size = 20  # Pixels per grid cell
+        self.base_grid_size = 16  # Base pixels per grid cell (at 100% zoom) - reduced from 20 for smaller cells
+        self.zoom_level = 1.0  # Current zoom level (1.0 = 100%)
+        self.min_zoom = 0.5  # Minimum zoom (50%)
+        self.max_zoom = 4.0  # Maximum zoom (400%)
+        self.grid_size = self.base_grid_size * self.zoom_level  # Current grid size
         self.show_grid = True
         
         # Infinite scroll settings
@@ -55,6 +61,17 @@ class VehicleCanvas(tk.Canvas):
             "#82E0AA", "#AED6F1", "#F4D03F", "#A569BD", "#48C9B0"
         ]
         
+        # Load tileset for vehicle parts
+        try:
+            self.tileset_loader = TilesetLoader()
+            self._image_refs = []  # Store image references to prevent garbage collection
+        except Exception as e:
+            print(f"Warning: Could not load tileset: {e}")
+            import traceback
+            traceback.print_exc()
+            self.tileset_loader = None
+            self._image_refs = []
+        
         # Bind events
         self.bind("<Button-1>", self.on_click)
         self.bind("<B1-Motion>", self.on_drag)
@@ -67,8 +84,9 @@ class VehicleCanvas(tk.Canvas):
         self.bind("<Motion>", self.on_motion)  # Mouse motion for tooltip
         self.bind("<Leave>", self.on_leave)  # Hide tooltip when mouse leaves
         
-        # Bind scroll events to redraw grid
-        self.bind("<MouseWheel>", lambda e: self.after_idle(self.draw_grid))
+        # Bind scroll events for zooming (Ctrl+wheel) or grid redraw
+        self.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.bind("<Control-MouseWheel>", self.on_zoom_wheel)
         
         # Bind arrow keys for navigation
         self.bind("<Key>", self.on_key_press)
@@ -542,38 +560,101 @@ class VehicleCanvas(tk.Canvas):
                     return parts_list[0]['part']
         return None
     
+    def _draw_checkered_fallback(self, x, y, cell_id):
+        """Draw a purple/magenta and black checkered pattern as fallback."""
+        checker_size = 4  # Size of each checker square
+        magenta = "#FF00FF"  # Magenta/purple
+        black = "#000000"
+        
+        # Convert grid_size to integer for range()
+        grid_size_int = int(self.grid_size)
+        
+        # Draw checkered pattern
+        for i in range(0, grid_size_int, checker_size):
+            for j in range(0, grid_size_int, checker_size):
+                # Alternate colors
+                color = magenta if ((i // checker_size + j // checker_size) % 2 == 0) else black
+                self.create_rectangle(
+                    x + i, y + j,
+                    x + i + checker_size, y + j + checker_size,
+                    fill=color,
+                    outline="",
+                    tags=(cell_id, "cell")
+                )
+        
+        # Add outline
+        self.create_rectangle(
+            x, y,
+            x + grid_size_int, y + grid_size_int,
+            outline="lightgray",
+            width=1,
+            tags=(cell_id, "cell")
+        )
+    
     def draw_cell(self, grid_x, grid_y):
         """Draw a single cell based on vehicle parts."""
+        # Get screen coordinates for this grid cell
         x, y = self.grid_to_screen(grid_x, grid_y)
         
         # Remove existing cell drawing (delete all items with this cell_id tag)
         cell_id = f"cell_{grid_x}_{grid_y}"
         self.delete(cell_id)
         
-        # Determine color based on parts
+        # Determine what to draw based on parts
         parts = self.vehicle.get_parts_at(grid_x, grid_y)
         items = self.vehicle.get_items_at(grid_x, grid_y)
         
         if parts or items:
-            # Light blue tile for parts/items
-            fill_color = "#ADD8E6"  # Light blue
-            outline_color = "lightgray"
-            width = 1
+            # Try to draw tileset tile if available
+            if parts and self.tileset_loader:
+                primary_part = parts[0]
+                primary_name = self.get_primary_part_name(primary_part)
+                
+                if primary_name:
+                    # Get tile image resized to grid size (convert to int for PIL)
+                    grid_size_int = int(self.grid_size)
+                    tile_image = self.tileset_loader.get_tile_image(
+                        primary_name,
+                        target_size=(grid_size_int, grid_size_int)
+                    )
+                    if tile_image:
+                        # Draw the tile image (fill the entire cell)
+                        # x, y are already screen coordinates from grid_to_screen()
+                        # Position at top-left corner of cell, not centered
+                        img_x = x
+                        img_y = y
+                        
+                        img_id = self.create_image(
+                            img_x,
+                            img_y,
+                            image=tile_image,
+                            anchor=tk.NW,  # Anchor to northwest (top-left) corner
+                            tags=(cell_id, "cell")
+                        )
+                        # Keep reference to prevent garbage collection
+                        # Store image reference in a way that persists
+                        if not hasattr(self, '_image_refs_dict'):
+                            self._image_refs_dict = {}
+                        self._image_refs_dict[img_id] = tile_image
+                    else:
+                        # Fallback to checkered pattern if tile not found
+                        self._draw_checkered_fallback(x, y, cell_id)
+                else:
+                    # Fallback to checkered pattern
+                    self._draw_checkered_fallback(x, y, cell_id)
+            else:
+                # No tileset or items only - use checkered pattern
+                self._draw_checkered_fallback(x, y, cell_id)
         else:
             # Empty cell
-            fill_color = "white"
-            outline_color = "lightgray"
-            width = 1
-        
-        # Draw filled rectangle
-        self.create_rectangle(
-            x, y,
-            x + self.grid_size, y + self.grid_size,
-            fill=fill_color,
-            outline=outline_color,
-            width=width,
-            tags=(cell_id, "cell")
-        )
+            self.create_rectangle(
+                x, y,
+                x + self.grid_size, y + self.grid_size,
+                fill="white",
+                outline="lightgray",
+                width=1,
+                tags=(cell_id, "cell")
+            )
         
         # Draw indicators: green plus for items (top-right), orange plus for multiple parts (bottom-right)
         if items:
@@ -770,4 +851,131 @@ class VehicleCanvas(tk.Canvas):
         
         # Redraw grid after scroll region changes
         self.after_idle(self.draw_grid)
+    
+    def on_mouse_wheel(self, event):
+        """Handle mouse wheel for scrolling (non-zoom)."""
+        # Just redraw grid after scrolling
+        self.after_idle(self.draw_grid)
+    
+    def on_zoom_wheel(self, event):
+        """Handle Ctrl+MouseWheel for zooming."""
+        # Zoom in or out based on scroll direction
+        # On Linux, delta might be negative for scroll up, positive for scroll down
+        # On Windows/Mac, delta is typically positive for scroll up
+        delta = event.delta
+        if hasattr(event, 'num') and event.num in [4, 5]:  # Linux
+            # Linux: 4 = scroll up, 5 = scroll down
+            if event.num == 4:
+                self.zoom_in()
+            else:
+                self.zoom_out()
+        else:
+            # Windows/Mac: delta > 0 = scroll up = zoom in
+            if delta > 0:
+                self.zoom_in()
+            else:
+                self.zoom_out()
+    
+    def zoom_in(self, factor=1.2):
+        """Zoom in on the canvas."""
+        new_zoom = self.zoom_level * factor
+        if new_zoom <= self.max_zoom:
+            self.set_zoom(new_zoom)
+    
+    def zoom_out(self, factor=1.2):
+        """Zoom out on the canvas."""
+        new_zoom = self.zoom_level / factor
+        if new_zoom >= self.min_zoom:
+            self.set_zoom(new_zoom)
+    
+    def reset_zoom(self):
+        """Reset zoom to 100%."""
+        self.set_zoom(1.0)
+    
+    def set_zoom(self, zoom_level):
+        """Set the zoom level and update the canvas, maintaining view center."""
+        # Clamp zoom level
+        zoom_level = max(self.min_zoom, min(self.max_zoom, zoom_level))
+        
+        # Get current view center before zoom
+        old_zoom = self.zoom_level
+        
+        # Get scroll region to understand coordinate system
+        scroll_region = self.cget("scrollregion")
+        if not scroll_region:
+            # No scroll region yet, just update zoom
+            self.zoom_level = zoom_level
+            self.grid_size = self.base_grid_size * self.zoom_level
+            if self.zoom_callback:
+                self.zoom_callback()
+            self.redraw()
+            return
+        
+        region = scroll_region.split()
+        region_min_x = float(region[0])
+        region_min_y = float(region[1])
+        region_max_x = float(region[2])
+        region_max_y = float(region[3])
+        region_width = region_max_x - region_min_x
+        region_height = region_max_y - region_min_y
+        
+        # Get current scroll position
+        scroll_x = self.xview()[0]
+        scroll_y = self.yview()[0]
+        
+        # Get viewport dimensions
+        canvas_width = self.winfo_width()
+        canvas_height = self.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            # Canvas not ready yet
+            self.zoom_level = zoom_level
+            self.grid_size = self.base_grid_size * self.zoom_level
+            if self.zoom_callback:
+                self.zoom_callback()
+            self.redraw()
+            return
+        
+        # Calculate the current view center in canvas coordinates
+        # The left edge of viewport is at: region_min_x + scroll_x * region_width
+        # The center is at: left_edge + canvas_width / 2
+        view_center_x = region_min_x + scroll_x * region_width + canvas_width / 2
+        view_center_y = region_min_y + scroll_y * region_height + canvas_height / 2
+        
+        # Convert view center to grid coordinates using old zoom
+        if old_zoom > 0:
+            old_grid_size = self.base_grid_size * old_zoom
+            grid_x = view_center_x / old_grid_size
+            grid_y = view_center_y / old_grid_size
+        else:
+            grid_x = view_center_x / self.base_grid_size
+            grid_y = view_center_y / self.base_grid_size
+        
+        # Update zoom level
+        self.zoom_level = zoom_level
+        self.grid_size = self.base_grid_size * self.zoom_level
+        
+        # Calculate new canvas coordinates for the same grid position
+        new_canvas_x = grid_x * self.grid_size
+        new_canvas_y = grid_y * self.grid_size
+        
+        # Calculate new scroll position to keep the same point centered
+        # We want: new_canvas_x = region_min_x + new_scroll_x * region_width + canvas_width / 2
+        # So: new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
+        new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
+        new_scroll_y = (new_canvas_y - region_min_y - canvas_height / 2) / region_height
+        
+        # Clamp scroll values
+        new_scroll_x = max(0.0, min(1.0, new_scroll_x))
+        new_scroll_y = max(0.0, min(1.0, new_scroll_y))
+        
+        self.xview_moveto(new_scroll_x)
+        self.yview_moveto(new_scroll_y)
+        
+        # Notify callback if set
+        if self.zoom_callback:
+            self.zoom_callback()
+        
+        # Redraw everything
+        self.redraw()
 

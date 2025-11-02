@@ -428,6 +428,13 @@ class VehiclePainterApp:
         )
         self.recenter_button.pack(side=tk.LEFT, padx=2)
         
+        self.rotate_button = ttk.Button(
+            button_frame,
+            text="Rotate",
+            command=self.rotate_view
+        )
+        self.rotate_button.pack(side=tk.LEFT, padx=2)
+        
         self.recenter_canvas_frame = canvas_frame
         self.button_frame = button_frame
         # Position will be set after canvas is configured
@@ -580,7 +587,17 @@ class VehiclePainterApp:
         if grid_x is None or grid_y is None:
             self.coordinate_label.config(text="")
         else:
-            self.coordinate_label.config(text=f"({grid_x}, {grid_y})")
+            rotation = self.canvas.get_rotation()
+            if rotation != 0:
+                self.coordinate_label.config(text=f"({grid_x}, {grid_y}) [{rotation}°]")
+            else:
+                self.coordinate_label.config(text=f"({grid_x}, {grid_y})")
+    
+    def rotate_view(self):
+        """Rotate the canvas view by 90 degrees."""
+        self.canvas.rotate_view()
+        # Recenter after rotation to keep view centered
+        self.root.after_idle(self.recenter_view)
     
     def recenter_view(self):
         """Recenter the canvas view on the vehicle or origin, properly centered in viewport."""

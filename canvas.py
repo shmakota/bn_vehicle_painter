@@ -31,6 +31,9 @@ class VehicleCanvas(tk.Canvas):
         self.grid_size = self.base_grid_size * self.zoom_level  # Current grid size
         self.show_grid = True
         
+        # View rotation (in degrees: 0, 90, 180, 270)
+        self.rotation = 0
+        
         # Infinite scroll settings
         self.base_scroll_region_size = 2500  # Base scroll region size (at 100% zoom)
         # Scroll region size scales with zoom to maintain same logical tile coverage
@@ -825,6 +828,52 @@ class VehicleCanvas(tk.Canvas):
         for x, y in coords:
             self.draw_cell(x, y)
     
+    def rotate_coordinates(self, x, y):
+        """Rotate coordinates based on current view rotation.
+        
+        Args:
+            x, y: Original grid coordinates
+            
+        Returns:
+            (rx, ry): Rotated coordinates
+        """
+        if self.rotation == 0:
+            return x, y
+        elif self.rotation == 90:
+            # 90° clockwise: (x, y) -> (-y, x)
+            return -y, x
+        elif self.rotation == 180:
+            # 180°: (x, y) -> (-x, -y)
+            return -x, -y
+        elif self.rotation == 270:
+            # 270° clockwise (90° CCW): (x, y) -> (y, -x)
+            return y, -x
+        else:
+            return x, y
+    
+    def unrotate_coordinates(self, rx, ry):
+        """Convert rotated coordinates back to original grid coordinates.
+        
+        Args:
+            rx, ry: Rotated coordinates
+            
+        Returns:
+            (x, y): Original grid coordinates
+        """
+        if self.rotation == 0:
+            return rx, ry
+        elif self.rotation == 90:
+            # Inverse of 90° CW: (-y, x) -> (x, y), so (rx, ry) -> (ry, -rx)
+            return ry, -rx
+        elif self.rotation == 180:
+            # Inverse of 180°: (-x, -y) -> (x, y), so (rx, ry) -> (-rx, -ry)
+            return -rx, -ry
+        elif self.rotation == 270:
+            # Inverse of 270° CW: (y, -x) -> (x, y), so (rx, ry) -> (-ry, rx)
+            return -ry, rx
+        else:
+            return rx, ry
+    
     def screen_to_grid(self, x, y):
         """Convert screen coordinates to grid coordinates.
         
@@ -832,20 +881,39 @@ class VehicleCanvas(tk.Canvas):
             x, y: Canvas coordinates (from canvasx/canvasy)
         
         Returns:
-            (grid_x, grid_y): Grid coordinates
+            (grid_x, grid_y): Grid coordinates (unrotated, original)
         """
         # Use floor division to handle negative coordinates correctly
         # int() truncates towards zero, but floor() rounds down for negatives
         # This ensures correct grid cell selection for negative coordinates
-        grid_x = floor(x / self.grid_size)
-        grid_y = floor(y / self.grid_size)
+        screen_grid_x = floor(x / self.grid_size)
+        screen_grid_y = floor(y / self.grid_size)
+        
+        # Convert from screen grid coordinates to actual grid coordinates
+        grid_x, grid_y = self.unrotate_coordinates(screen_grid_x, screen_grid_y)
         return grid_x, grid_y
     
     def grid_to_screen(self, grid_x, grid_y):
         """Convert grid coordinates to screen coordinates."""
-        x = grid_x * self.grid_size
-        y = grid_y * self.grid_size
+        # Rotate the grid coordinates first
+        rx, ry = self.rotate_coordinates(grid_x, grid_y)
+        # Then convert to screen coordinates
+        x = rx * self.grid_size
+        y = ry * self.grid_size
         return x, y
+    
+    def rotate_view(self):
+        """Rotate the view by 90 degrees clockwise."""
+        self.rotation = (self.rotation + 90) % 360
+        self.redraw()
+        
+        # Notify callback if set
+        if self.zoom_callback:  # Reusing zoom_callback, could be renamed to view_callback
+            self.zoom_callback()
+    
+    def get_rotation(self):
+        """Get current rotation in degrees."""
+        return self.rotation
     
     def paint_cell(self, grid_x, grid_y, save_state=True):
         """Paint a cell at the given grid coordinates using palette.
@@ -1215,17 +1283,32 @@ class VehicleCanvas(tk.Canvas):
         
         # Calculate grid bounds using the scaled grid_size (for logical alignment)
         # This ensures grid lines align with tiles at any zoom level
-        grid_x1 = int(view_x1 / self.grid_size) - 1
-        grid_y1 = int(view_y1 / self.grid_size) - 1
-        grid_x2 = int(view_x2 / self.grid_size) + 1
-        grid_y2 = int(view_y2 / self.grid_size) + 1
+        # These are screen grid coordinates (already rotated)
+        screen_grid_x1 = int(view_x1 / self.grid_size) - 1
+        screen_grid_y1 = int(view_y1 / self.grid_size) - 1
+        screen_grid_x2 = int(view_x2 / self.grid_size) + 1
+        screen_grid_y2 = int(view_y2 / self.grid_size) + 1
+        
+        # Find where logical origin (0, 0) appears in screen coordinates
+        origin_screen_x, origin_screen_y = self.grid_to_screen(0, 0)
         
         # Draw vertical grid lines
-        for grid_x in range(grid_x1, grid_x2 + 1):
-            x = grid_x * self.grid_size
+        for screen_grid_x in range(screen_grid_x1, screen_grid_x2 + 1):
+            x = screen_grid_x * self.grid_size
             
-            # Special handling for x=0 axis line
-            if grid_x == 0:
+            # Check if this is the axis line for logical x=0 or y=0
+            # At 0°/180°: logical x=0 appears as vertical line at screen x=0
+            # At 90°/270°: logical y=0 appears as vertical line at screen x=0
+            is_axis = False
+            if screen_grid_x == 0:
+                if self.rotation == 0 or self.rotation == 180:
+                    # Vertical axis for logical x=0 (vertical line)
+                    is_axis = True
+                elif self.rotation == 90 or self.rotation == 270:
+                    # Logical y=0 appears as vertical line at screen x=0
+                    is_axis = True
+            
+            if is_axis:
                 self.create_line(
                     x, view_y1 - self.scroll_region_size,
                     x, view_y2 + self.scroll_region_size,
@@ -1243,11 +1326,22 @@ class VehicleCanvas(tk.Canvas):
                 )
         
         # Draw horizontal grid lines
-        for grid_y in range(grid_y1, grid_y2 + 1):
-            y = grid_y * self.grid_size
+        for screen_grid_y in range(screen_grid_y1, screen_grid_y2 + 1):
+            y = screen_grid_y * self.grid_size
             
-            # Special handling for y=0 axis line
-            if grid_y == 0:
+            # Check if this is the axis line for logical x=0 or y=0
+            # At 0°/180°: logical y=0 appears as horizontal line at screen y=0
+            # At 90°/270°: logical x=0 appears as horizontal line at screen y=0
+            is_axis = False
+            if screen_grid_y == 0:
+                if self.rotation == 0 or self.rotation == 180:
+                    # Horizontal axis for logical y=0
+                    is_axis = True
+                elif self.rotation == 90 or self.rotation == 270:
+                    # Logical x=0 appears as horizontal line at screen y=0
+                    is_axis = True
+            
+            if is_axis:
                 self.create_line(
                     view_x1 - self.scroll_region_size, y,
                     view_x2 + self.scroll_region_size, y,
@@ -1264,9 +1358,9 @@ class VehicleCanvas(tk.Canvas):
                     tags="grid"
                 )
         
-        # Draw origin marker (0,0 intersection)
-        origin_x = 0
-        origin_y = 0
+        # Draw origin marker (0,0 intersection) at its rotated position
+        origin_x = origin_screen_x
+        origin_y = origin_screen_y
         marker_size = 8
         self.create_oval(
             origin_x - marker_size, origin_y - marker_size,

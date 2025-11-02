@@ -43,6 +43,74 @@ class VehiclePainterApp:
         self.left_panel.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         self.left_panel.grid_propagate(False)  # Prevent widgets from changing panel size
         self.left_panel.columnconfigure(0, weight=1)
+        self.left_panel.rowconfigure(0, weight=1)
+        
+        # Create scrollable canvas for left panel content
+        left_canvas = tk.Canvas(self.left_panel, highlightthickness=0)
+        left_scrollbar = ttk.Scrollbar(self.left_panel, orient=tk.VERTICAL, command=left_canvas.yview)
+        self.left_scrollable_frame = ttk.Frame(left_canvas)
+        self.left_scrollable_frame.columnconfigure(0, weight=1)  # Allow widgets to fill width
+        
+        # Configure canvas scrolling
+        self.left_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+        )
+        
+        left_canvas.create_window((0, 0), window=self.left_scrollable_frame, anchor="nw")
+        left_canvas.configure(yscrollcommand=left_scrollbar.set)
+        
+        # Grid canvas and scrollbar
+        left_canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        left_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        
+        # Update scroll region when window is resized or content changes
+        def update_left_scroll_region(event=None):
+            # Update the scroll region
+            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+            # Make sure the scrollable frame width matches canvas width (minus scrollbar if visible)
+            canvas_width = left_canvas.winfo_width()
+            if canvas_width > 1:
+                left_canvas.itemconfig(left_canvas.find_all()[0], width=canvas_width)
+        
+        def on_canvas_configure(event):
+            # When canvas is resized, update scrollable frame width
+            canvas_width = event.width
+            left_canvas.itemconfig(left_canvas.find_all()[0], width=canvas_width)
+            update_left_scroll_region()
+        
+        self.left_scrollable_frame.bind("<Configure>", update_left_scroll_region)
+        left_canvas.bind("<Configure>", on_canvas_configure)
+        
+        # Bind mousewheel to canvas (only when hovering over it)
+        def on_left_panel_scroll_wheel(event):
+            # Only scroll if mouse is over the left panel
+            if self.left_panel.winfo_containing(event.x_root, event.y_root):
+                left_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        def on_left_panel_scroll_button(event):
+            # Linux button 4/5 for scrolling
+            if event.num == 4:  # Scroll up
+                left_canvas.yview_scroll(-1, "units")
+            elif event.num == 5:  # Scroll down
+                left_canvas.yview_scroll(1, "units")
+        
+        # Bind to left_panel instead of bind_all to avoid conflicts
+        # Windows/Mac: MouseWheel
+        self.left_panel.bind("<MouseWheel>", on_left_panel_scroll_wheel)
+        left_canvas.bind("<MouseWheel>", on_left_panel_scroll_wheel)
+        self.left_scrollable_frame.bind("<MouseWheel>", on_left_panel_scroll_wheel)
+        # Linux: Button-4 and Button-5
+        self.left_panel.bind("<Button-4>", on_left_panel_scroll_button)
+        self.left_panel.bind("<Button-5>", on_left_panel_scroll_button)
+        left_canvas.bind("<Button-4>", on_left_panel_scroll_button)
+        left_canvas.bind("<Button-5>", on_left_panel_scroll_button)
+        self.left_scrollable_frame.bind("<Button-4>", on_left_panel_scroll_button)
+        self.left_scrollable_frame.bind("<Button-5>", on_left_panel_scroll_button)
+        
+        # Store references
+        self.left_canvas = left_canvas
+        self.left_scrollbar = left_scrollbar
         
         # Draggable separator with visible handle
         separator_frame = tk.Frame(main_frame, width=8, bg="lightgray", cursor="sb_h_double_arrow")
@@ -64,7 +132,7 @@ class VehiclePainterApp:
         self.left_panel_max_width = 600
         
         # Palette selector
-        palette_frame = ttk.LabelFrame(self.left_panel, text="Palette", padding="10")
+        palette_frame = ttk.LabelFrame(self.left_scrollable_frame, text="Palette", padding="10")
         palette_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         palette_frame.columnconfigure(0, weight=1)
         
@@ -167,7 +235,7 @@ class VehiclePainterApp:
         ).grid(row=0, column=2, sticky=(tk.W, tk.E))
         
         # Tools frame
-        tools_frame = ttk.LabelFrame(self.left_panel, text="Tools", padding="10")
+        tools_frame = ttk.LabelFrame(self.left_scrollable_frame, text="Tools", padding="10")
         tools_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         tools_frame.columnconfigure(0, weight=1)
         
@@ -193,15 +261,63 @@ class VehiclePainterApp:
             value="select"
         ).grid(row=2, column=0, sticky=tk.W)
         
+        ttk.Radiobutton(
+            tools_frame,
+            text="Square",
+            variable=self.tool_var,
+            value="square"
+        ).grid(row=3, column=0, sticky=tk.W)
+        
+        ttk.Radiobutton(
+            tools_frame,
+            text="Square Erase",
+            variable=self.tool_var,
+            value="square_erase"
+        ).grid(row=4, column=0, sticky=tk.W)
+        
+        ttk.Radiobutton(
+            tools_frame,
+            text="Pan",
+            variable=self.tool_var,
+            value="pan"
+        ).grid(row=5, column=0, sticky=tk.W)
+        
+        # Undo/Redo buttons
+        undo_redo_frame = ttk.Frame(tools_frame)
+        undo_redo_frame.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(10, 5))
+        undo_redo_frame.columnconfigure(0, weight=1)
+        undo_redo_frame.columnconfigure(1, weight=1)
+        
+        self.undo_button = ttk.Button(
+            undo_redo_frame,
+            text="Undo (Ctrl+Z)",
+            command=self.undo_action
+        )
+        self.undo_button.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        
+        self.redo_button = ttk.Button(
+            undo_redo_frame,
+            text="Redo (Ctrl+Y)",
+            command=self.redo_action
+        )
+        self.redo_button.grid(row=0, column=1, sticky=(tk.W, tk.E))
+        
         ttk.Label(
             tools_frame,
-            text="Right-click: Edit Tile",
+            text="Middle-click: Edit Tile",
             font=("TkDefaultFont", 7),
             foreground="gray"
-        ).grid(row=3, column=0, sticky=tk.W, pady=(5, 0))
+        ).grid(row=7, column=0, sticky=tk.W, pady=(5, 0))
+        
+        ttk.Label(
+            tools_frame,
+            text="Right-click: Delete/Erase",
+            font=("TkDefaultFont", 7),
+            foreground="gray"
+        ).grid(row=8, column=0, sticky=tk.W)
         
         # Vehicle info frame
-        info_frame = ttk.LabelFrame(self.left_panel, text="Vehicle Info", padding="10")
+        info_frame = ttk.LabelFrame(self.left_scrollable_frame, text="Vehicle Info", padding="10")
         info_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         info_frame.columnconfigure(1, weight=1)
         
@@ -226,7 +342,7 @@ class VehiclePainterApp:
         self.items_label.grid(row=3, column=1, sticky=tk.W)
         
         # File operations frame
-        file_frame = ttk.LabelFrame(self.left_panel, text="File", padding="10")
+        file_frame = ttk.LabelFrame(self.left_scrollable_frame, text="File", padding="10")
         file_frame.grid(row=3, column=0, sticky=(tk.W, tk.E))
         file_frame.columnconfigure(0, weight=1)
         
@@ -413,8 +529,8 @@ class VehiclePainterApp:
     
     def position_coordinate_label(self):
         """Position the coordinate label in the bottom left corner of the canvas."""
-        def update_position():
-            # Get canvas frame dimensions
+        def update_position(event=None):
+            # Get canvas frame dimensions (not canvas widget, but the frame containing it)
             frame_width = self.recenter_canvas_frame.winfo_width()
             frame_height = self.recenter_canvas_frame.winfo_height()
             if frame_width > 1 and frame_height > 1:
@@ -424,15 +540,18 @@ class VehiclePainterApp:
                 label_height = self.coordinate_label.winfo_height() or 20
                 
                 # Position in bottom left with some padding
-                x = 10  # Padding from left
-                y = frame_height - label_height - 25  # Padding from bottom (accounting for horizontal scrollbar)
+                # Account for horizontal scrollbar at bottom (17px height)
+                # The canvas takes up most of the frame, scrollbar is at bottom
+                x = 10  # Padding from left edge
+                y = frame_height - label_height - 30  # Padding from bottom (accounting for horizontal scrollbar ~17px + padding)
                 
                 self.coordinate_label.place(x=x, y=y)
         
         # Update position after canvas is configured
         self.root.after_idle(update_position)
         # Also update when canvas frame resizes
-        self.recenter_canvas_frame.bind("<Configure>", lambda e: update_position())
+        # Use a named function to avoid lambda overwriting issues
+        self.recenter_canvas_frame.bind("<Configure>", update_position)
     
     def zoom_in(self):
         """Zoom in on the canvas."""
@@ -746,7 +865,7 @@ class VehiclePainterApp:
         edit_dialog = tk.Toplevel(self.root)
         edit_dialog.title(f"{'Add' if is_new else 'Edit'} Palette Entry" + (f": {char}" if not is_new else ""))
         edit_dialog.transient(self.root)
-        edit_dialog.geometry("500x500")
+        edit_dialog.geometry("500x650")
         
         main_frame = ttk.Frame(edit_dialog, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -980,6 +1099,7 @@ class VehiclePainterApp:
         if messagebox.askyesno("New Vehicle", "Create a new vehicle? Unsaved changes will be lost."):
             self.vehicle = Vehicle()
             self.canvas.vehicle = self.vehicle
+            self.canvas.clear_history()  # Clear undo/redo history for new vehicle
             self.canvas.redraw()
             self.canvas.update_idletasks()
             self.recenter_view()
@@ -1017,6 +1137,7 @@ class VehiclePainterApp:
                 self.vehicle = selected_vehicle
                 # Vehicle coordinates are normalized automatically in from_dict
                 self.canvas.vehicle = self.vehicle
+                self.canvas.clear_history()  # Clear undo/redo history when loading new vehicle
                 
                 # Generate palette automatically from vehicle
                 # Ask user if they want to separate multi-part tiles
@@ -1094,6 +1215,22 @@ class VehiclePainterApp:
     def update_status(self, message):
         """Update the status bar."""
         self.status_bar.config(text=message)
+    
+    def undo_action(self):
+        """Handle undo button click."""
+        if self.canvas.undo():
+            self.update_status("Undo: Last operation undone")
+            self.update_parts_count()
+        else:
+            self.update_status("Nothing to undo")
+    
+    def redo_action(self):
+        """Handle redo button click."""
+        if self.canvas.redo():
+            self.update_status("Redo: Last undone operation restored")
+            self.update_parts_count()
+        else:
+            self.update_status("Nothing to redo")
     
     def show_information_atlas(self):
         """Show an enhanced information dialog explaining UI elements and features."""

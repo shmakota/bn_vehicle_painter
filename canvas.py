@@ -5,6 +5,7 @@ Canvas widget for vehicle painting and editing.
 import tkinter as tk
 from math import sqrt, floor
 import hashlib
+import copy
 from tile_editor import TileEditorDialog
 # from tileset import TilesetLoader  # Disabled for now
 
@@ -31,12 +32,23 @@ class VehicleCanvas(tk.Canvas):
         self.show_grid = True
         
         # Infinite scroll settings
-        self.scroll_region_size = 2500  # Scroll region size (creates 5000x5000 area from -2500 to +2500)
+        self.base_scroll_region_size = 2500  # Base scroll region size (at 100% zoom)
+        # Scroll region size scales with zoom to maintain same logical tile coverage
+        self.scroll_region_size = self.base_scroll_region_size  # Initialize to base size
         
         # Drawing state
         self.is_drawing = False
         self.last_x = None
         self.last_y = None
+        self.square_start_x = None
+        self.square_start_y = None
+        
+        # Panning state
+        self.is_panning = False
+        self.pan_start_x = None
+        self.pan_start_y = None
+        self.pan_scroll_x = None
+        self.pan_scroll_y = None
         
         # Tile editor callback
         self.tile_editor_callback = None
@@ -50,6 +62,12 @@ class VehicleCanvas(tk.Canvas):
         self.last_mouse_x = 0
         self.last_mouse_y = 0
         self.last_mouse_grid = (0, 0)
+        
+        # Undo/redo system
+        self.undo_stack = []  # List of operations to undo
+        self.redo_stack = []  # List of operations to redo
+        self.max_history = 50  # Maximum number of undo operations
+        self.current_operation = None  # Current operation being built (for drag operations)
         
         # Part color mapping for visual distinction
         self.part_colors = {}  # part_name -> color
@@ -87,17 +105,187 @@ class VehicleCanvas(tk.Canvas):
         self.bind("<Motion>", self.on_motion)  # Mouse motion for tooltip
         self.bind("<Leave>", self.on_leave)  # Hide tooltip when mouse leaves
         
-        # Bind scroll events for zooming (Ctrl+wheel) or grid redraw
-        self.bind("<MouseWheel>", self.on_mouse_wheel)
+        # Bind scroll events for zooming
+        # Regular mouse wheel zooms, Ctrl+mouse wheel also zooms
+        self.bind("<MouseWheel>", self.on_zoom_wheel)
         self.bind("<Control-MouseWheel>", self.on_zoom_wheel)
+        # Linux button events
+        self.bind("<Button-4>", self.on_zoom_wheel)
+        self.bind("<Button-5>", self.on_zoom_wheel)
         
         # Bind arrow keys for navigation
         self.bind("<Key>", self.on_key_press)
+        # Bind Ctrl+Z and Ctrl+Y for undo/redo
+        self.bind("<Control-z>", self.on_undo)
+        self.bind("<Control-y>", self.on_redo)
+        self.bind("<Control-Z>", self.on_undo)  # Also handle Shift+Ctrl+Z
         self.focus_set()  # Enable keyboard focus
         
         # Initial draw and set infinite scroll region
         self.update_scroll_region()
         self.redraw()
+    
+    def save_tile_state(self, grid_x, grid_y):
+        """Save the current state of a tile (parts and items at that location).
+        
+        Returns:
+            dict: State dictionary with 'x', 'y', 'parts', and 'items' keys
+        """
+        parts = self.vehicle.get_parts_at(grid_x, grid_y)
+        items = self.vehicle.get_items_at(grid_x, grid_y)
+        
+        # Deep copy to avoid reference issues
+        return {
+            'x': grid_x,
+            'y': grid_y,
+            'parts': copy.deepcopy(parts),
+            'items': copy.deepcopy(items)
+        }
+    
+    def save_tiles_state(self, tile_coords):
+        """Save state for multiple tiles.
+        
+        Args:
+            tile_coords: List of (x, y) tuples
+            
+        Returns:
+            list: List of state dictionaries
+        """
+        states = []
+        for x, y in tile_coords:
+            states.append(self.save_tile_state(x, y))
+        return states
+    
+    def restore_tile_state(self, state):
+        """Restore a tile to a previous state.
+        
+        Args:
+            state: State dictionary with 'x', 'y', 'parts', and 'items'
+        """
+        grid_x = state['x']
+        grid_y = state['y']
+        
+        # Remove all current parts at this location
+        parts_to_remove = []
+        for i, part in enumerate(self.vehicle.parts):
+            if part.get('x') == grid_x and part.get('y') == grid_y:
+                parts_to_remove.append(i)
+        
+        for i in reversed(parts_to_remove):
+            self.vehicle.remove_part(i)
+        
+        # Remove all current items at this location
+        items_to_remove = []
+        for i, item in enumerate(self.vehicle.items):
+            if item.get('x') == grid_x and item.get('y') == grid_y:
+                items_to_remove.append(i)
+        
+        for i in reversed(items_to_remove):
+            self.vehicle.remove_item(i)
+        
+        # Add back the saved parts
+        for part in state['parts']:
+            self.vehicle.add_part(part)
+        
+        # Add back the saved items
+        for item in state['items']:
+            self.vehicle.add_item(item)
+        
+        # Redraw the cell
+        self.draw_cell(grid_x, grid_y)
+    
+    def restore_tiles_state(self, states):
+        """Restore multiple tiles to previous states.
+        
+        Args:
+            states: List of state dictionaries
+        """
+        for state in states:
+            self.restore_tile_state(state)
+        
+        # Redraw grid after restoring
+        self.draw_grid()
+    
+    def push_operation(self, before_states, after_states):
+        """Push an operation onto the undo stack.
+        
+        Args:
+            before_states: List of tile states before the operation
+            after_states: List of tile states after the operation
+        """
+        # Create operation entry
+        operation = {
+            'before': before_states,
+            'after': after_states
+        }
+        
+        # Add to undo stack
+        self.undo_stack.append(operation)
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_history:
+            self.undo_stack.pop(0)
+        
+        # Clear redo stack when new operation is performed
+        self.redo_stack = []
+    
+    def undo(self):
+        """Undo the last operation."""
+        if not self.undo_stack:
+            return False
+        
+        # Pop the last operation
+        operation = self.undo_stack.pop()
+        
+        # Restore the 'before' state
+        self.restore_tiles_state(operation['before'])
+        
+        # Push to redo stack
+        self.redo_stack.append(operation)
+        
+        # Update parts count if callback is set
+        if self.tile_editor_callback:
+            self.tile_editor_callback()
+        
+        return True
+    
+    def redo(self):
+        """Redo the last undone operation."""
+        if not self.redo_stack:
+            return False
+        
+        # Pop the last redo operation
+        operation = self.redo_stack.pop()
+        
+        # Restore the 'after' state
+        self.restore_tiles_state(operation['after'])
+        
+        # Push back to undo stack
+        self.undo_stack.append(operation)
+        
+        # Update parts count if callback is set
+        if self.tile_editor_callback:
+            self.tile_editor_callback()
+        
+        return True
+    
+    def on_undo(self, event=None):
+        """Handle undo keyboard shortcut."""
+        if self.undo():
+            return "break"  # Prevent default handling
+        return None
+    
+    def on_redo(self, event=None):
+        """Handle redo keyboard shortcut."""
+        if self.redo():
+            return "break"  # Prevent default handling
+        return None
+    
+    def clear_history(self):
+        """Clear the undo/redo history."""
+        self.undo_stack = []
+        self.redo_stack = []
+        self.current_operation = None
     
     def on_click(self, event):
         """Handle mouse click."""
@@ -114,15 +302,40 @@ class VehicleCanvas(tk.Canvas):
         
         if tool == "paint":
             self.paint_cell(grid_x, grid_y)
+            self.last_x = grid_x
+            self.last_y = grid_y
+            self.is_drawing = True
         elif tool == "erase":
             self.erase_cell(grid_x, grid_y)
+            self.last_x = grid_x
+            self.last_y = grid_y
+            self.is_drawing = True
         elif tool == "select":
+            # Finalize any ongoing operation before opening editor
+            self.finalize_operation()
             # Open tile editor
             self.open_tile_editor(grid_x, grid_y)
-        
-        self.last_x = grid_x
-        self.last_y = grid_y
-        self.is_drawing = True
+        elif tool == "square":
+            # Finalize any ongoing operation
+            self.finalize_operation()
+            # Start square/rectangle drawing
+            self.square_start_x = grid_x
+            self.square_start_y = grid_y
+            self.last_x = grid_x
+            self.last_y = grid_y
+            self.is_drawing = True
+        elif tool == "square_erase":
+            # Finalize any ongoing operation
+            self.finalize_operation()
+            # Start square/rectangle erasing
+            self.square_start_x = grid_x
+            self.square_start_y = grid_y
+            self.last_x = grid_x
+            self.last_y = grid_y
+            self.is_drawing = True
+        elif tool == "pan":
+            # Start panning
+            self.start_pan(event.x, event.y)
     
     def on_right_click(self, event):
         """Handle right-click - erase tile."""
@@ -162,6 +375,9 @@ class VehicleCanvas(tk.Canvas):
     
     def on_right_release(self, event):
         """Handle right-click release."""
+        # Finalize any ongoing operation (for erase drags)
+        self.finalize_operation()
+        
         self.is_drawing = False
         self.last_x = None
         self.last_y = None
@@ -171,6 +387,79 @@ class VehicleCanvas(tk.Canvas):
         x, y = self.canvasx(event.x), self.canvasy(event.y)
         grid_x, grid_y = self.screen_to_grid(x, y)
         self.open_tile_editor(grid_x, grid_y)
+    
+    def start_pan(self, screen_x, screen_y):
+        """Start panning operation."""
+        self.is_panning = True
+        self.pan_start_x = screen_x
+        self.pan_start_y = screen_y
+        
+        # Store initial scroll position
+        self.pan_scroll_x = self.xview()[0]
+        self.pan_scroll_y = self.yview()[0]
+        
+        # Hide tooltip during panning
+        self.hide_tooltip()
+        
+        # Mark as drawing to prevent other operations
+        self.is_drawing = True
+    
+    def do_pan(self, screen_x, screen_y):
+        """Perform panning based on mouse movement."""
+        if not self.is_panning:
+            return
+        
+        # Calculate mouse movement delta
+        delta_x = screen_x - self.pan_start_x
+        delta_y = screen_y - self.pan_start_y
+        
+        # Get scroll region to calculate scroll deltas
+        scroll_region = self.cget("scrollregion")
+        if not scroll_region:
+            return
+        
+        region = scroll_region.split()
+        region_min_x = float(region[0])
+        region_min_y = float(region[1])
+        region_max_x = float(region[2])
+        region_max_y = float(region[3])
+        region_width = region_max_x - region_min_x
+        region_height = region_max_y - region_min_y
+        
+        # Get canvas dimensions
+        canvas_width = self.winfo_width()
+        canvas_height = self.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            return
+        
+        # Calculate scroll deltas (inverse of mouse movement - dragging left scrolls right)
+        scroll_delta_x = -delta_x / region_width
+        scroll_delta_y = -delta_y / region_height
+        
+        # Update scroll position
+        new_scroll_x = self.pan_scroll_x + scroll_delta_x
+        new_scroll_y = self.pan_scroll_y + scroll_delta_y
+        
+        # Clamp to valid range
+        new_scroll_x = max(0.0, min(1.0, new_scroll_x))
+        new_scroll_y = max(0.0, min(1.0, new_scroll_y))
+        
+        self.xview_moveto(new_scroll_x)
+        self.yview_moveto(new_scroll_y)
+        
+        # Redraw grid after panning
+        self.after_idle(self.draw_grid)
+    
+    def stop_pan(self):
+        """Stop panning operation."""
+        self.is_panning = False
+        self.pan_start_x = None
+        self.pan_start_y = None
+        self.pan_scroll_x = None
+        self.pan_scroll_y = None
+        self.is_drawing = False
+    
     
     def on_drag(self, event):
         """Handle mouse drag."""
@@ -183,10 +472,17 @@ class VehicleCanvas(tk.Canvas):
         x, y = self.canvasx(event.x), self.canvasy(event.y)
         grid_x, grid_y = self.screen_to_grid(x, y)
         
-        # Only paint if moved to a new cell
-        if grid_x != self.last_x or grid_y != self.last_y:
-            tool = self.tool_var.get()
-            
+        tool = self.tool_var.get()
+        
+        if tool == "pan":
+            # Handle panning
+            self.do_pan(event.x, event.y)
+        elif tool == "square" or tool == "square_erase":
+            # For square/square_erase tools, just update the end position - we'll fill/erase on release
+            self.last_x = grid_x
+            self.last_y = grid_y
+        elif grid_x != self.last_x or grid_y != self.last_y:
+            # Only paint/erase if moved to a new cell
             if tool == "paint":
                 self.paint_cell(grid_x, grid_y)
             elif tool == "erase":
@@ -195,16 +491,72 @@ class VehicleCanvas(tk.Canvas):
             self.last_x = grid_x
             self.last_y = grid_y
     
+    def finalize_operation(self):
+        """Finalize the current operation by saving after states and pushing to undo stack."""
+        if self.current_operation is None:
+            return
+        
+        # Save after states for all affected tiles
+        after_states = []
+        for x, y in self.current_operation['affected_tiles']:
+            after_states.append(self.save_tile_state(x, y))
+        
+        # Push operation to undo stack
+        if self.current_operation['before_states'] or after_states:
+            self.push_operation(
+                self.current_operation['before_states'],
+                after_states
+            )
+        
+        # Clear current operation
+        self.current_operation = None
+    
     def on_release(self, event):
         """Handle mouse release."""
+        tool = self.tool_var.get()
+        
+        if tool == "square" and self.square_start_x is not None and self.square_start_y is not None:
+            # Fill the rectangle/square area
+            x, y = self.canvasx(event.x), self.canvasy(event.y)
+            end_x, end_y = self.screen_to_grid(x, y)
+            
+            self.fill_rectangle(
+                self.square_start_x, self.square_start_y,
+                end_x, end_y
+            )
+            
+            self.square_start_x = None
+            self.square_start_y = None
+        elif tool == "square_erase" and self.square_start_x is not None and self.square_start_y is not None:
+            # Erase the rectangle/square area
+            x, y = self.canvasx(event.x), self.canvasy(event.y)
+            end_x, end_y = self.screen_to_grid(x, y)
+            
+            self.erase_rectangle(
+                self.square_start_x, self.square_start_y,
+                end_x, end_y
+            )
+            
+            self.square_start_x = None
+            self.square_start_y = None
+        
+        tool = self.tool_var.get()
+        
+        if tool == "pan":
+            # Stop panning
+            self.stop_pan()
+        else:
+            # Finalize any ongoing operation (for paint/erase drags)
+            self.finalize_operation()
+        
         self.is_drawing = False
         self.last_x = None
         self.last_y = None
     
     def on_motion(self, event):
         """Handle mouse motion - show tooltip with tile information."""
-        # Don't show tooltip while dragging
-        if self.is_drawing:
+        # Don't show tooltip while dragging or panning
+        if self.is_drawing or self.is_panning:
             return
         
         x, y = self.canvasx(event.x), self.canvasy(event.y)
@@ -337,6 +689,16 @@ class VehicleCanvas(tk.Canvas):
         result = ""
         if 'item' in item:
             result += f"Item: {item['item']}"
+        if 'items' in item:
+            # Handle "items" (plural) field - can be string or list
+            if result:
+                result += "\n"
+            items_value = item['items']
+            if isinstance(items_value, list):
+                items_str = ", ".join(str(i) for i in items_value)
+                result += f"Items: {items_str}"
+            else:
+                result += f"Items: {items_value}"
         if 'item_groups' in item:
             if result:
                 result += "\n"
@@ -485,10 +847,29 @@ class VehicleCanvas(tk.Canvas):
         y = grid_y * self.grid_size
         return x, y
     
-    def paint_cell(self, grid_x, grid_y):
-        """Paint a cell at the given grid coordinates using palette."""
+    def paint_cell(self, grid_x, grid_y, save_state=True):
+        """Paint a cell at the given grid coordinates using palette.
+        
+        Args:
+            grid_x, grid_y: Grid coordinates
+            save_state: If True and this is the start of an operation, save state before
+        """
         if not self.palette or not self.current_palette_char:
             return
+        
+        # Start a new operation if not already in one
+        if save_state and self.current_operation is None:
+            self.current_operation = {
+                'before_states': [],
+                'affected_tiles': set()
+            }
+        
+        # Add tile to affected set if in an operation
+        if self.current_operation is not None:
+            if (grid_x, grid_y) not in self.current_operation['affected_tiles']:
+                # Save state before first change to this tile
+                self.current_operation['before_states'].append(self.save_tile_state(grid_x, grid_y))
+                self.current_operation['affected_tiles'].add((grid_x, grid_y))
         
         # Create parts from palette character
         parts = self.palette.create_parts_from_char(self.current_palette_char, grid_x, grid_y)
@@ -508,8 +889,27 @@ class VehicleCanvas(tk.Canvas):
             self.show_tooltip(grid_x, grid_y, 0, 0)  # Position will be updated on next motion
             self.update_idletasks()
     
-    def erase_cell(self, grid_x, grid_y):
-        """Erase all parts and items at the given grid coordinates."""
+    def erase_cell(self, grid_x, grid_y, save_state=True):
+        """Erase all parts and items at the given grid coordinates.
+        
+        Args:
+            grid_x, grid_y: Grid coordinates
+            save_state: If True and this is the start of an operation, save state before
+        """
+        # Start a new operation if not already in one
+        if save_state and self.current_operation is None:
+            self.current_operation = {
+                'before_states': [],
+                'affected_tiles': set()
+            }
+        
+        # Add tile to affected set if in an operation
+        if self.current_operation is not None:
+            if (grid_x, grid_y) not in self.current_operation['affected_tiles']:
+                # Save state before first change to this tile
+                self.current_operation['before_states'].append(self.save_tile_state(grid_x, grid_y))
+                self.current_operation['affected_tiles'].add((grid_x, grid_y))
+        
         # Remove all parts at this location
         parts_to_remove = []
         for i, part in enumerate(self.vehicle.parts):
@@ -537,6 +937,57 @@ class VehicleCanvas(tk.Canvas):
         if self.current_hover_tile == (grid_x, grid_y):
             self.show_tooltip(grid_x, grid_y, 0, 0)  # Position will be updated on next motion
             self.update_idletasks()
+    
+    def fill_rectangle(self, x1, y1, x2, y2):
+        """Fill a rectangle area with the current palette entry."""
+        # Normalize coordinates (x1,y1 is top-left, x2,y2 is bottom-right)
+        min_x = min(x1, x2)
+        max_x = max(x1, x2)
+        min_y = min(y1, y2)
+        max_y = max(y1, y2)
+        
+        # Save state before operation
+        tile_coords = [(x, y) for x in range(min_x, max_x + 1) for y in range(min_y, max_y + 1)]
+        before_states = self.save_tiles_state(tile_coords)
+        
+        # Fill all cells in the rectangle (don't save state individually, we're handling it here)
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                self.paint_cell(x, y, save_state=False)
+        
+        # Save state after operation
+        after_states = self.save_tiles_state(tile_coords)
+        
+        # Push to undo stack
+        self.push_operation(before_states, after_states)
+    
+    def erase_rectangle(self, x1, y1, x2, y2):
+        """Erase all parts and items in a rectangle area."""
+        # Normalize coordinates (x1,y1 is top-left, x2,y2 is bottom-right)
+        min_x = min(x1, x2)
+        max_x = max(x1, x2)
+        min_y = min(y1, y2)
+        max_y = max(y1, y2)
+        
+        # Save state before operation
+        tile_coords = [(x, y) for x in range(min_x, max_x + 1) for y in range(min_y, max_y + 1)]
+        before_states = self.save_tiles_state(tile_coords)
+        
+        # Erase all cells in the rectangle (don't save state individually, we're handling it here)
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                self.erase_cell(x, y, save_state=False)
+        
+        # Save state after operation
+        after_states = self.save_tiles_state(tile_coords)
+        
+        # Push to undo stack
+        self.push_operation(before_states, after_states)
+        
+        # Redraw grid to ensure axis lines remain visible
+        self.draw_grid()
+        # Ensure axis lines stay on top after redraw
+        self.tag_raise("axis")
     
     def open_tile_editor(self, grid_x, grid_y):
         """Open the tile editor for the given coordinates."""
@@ -735,7 +1186,11 @@ class VehicleCanvas(tk.Canvas):
             )
     
     def draw_grid(self):
-        """Draw the grid lines with infinite scrolling and origin markers."""
+        """Draw the grid lines with infinite scrolling and origin markers.
+        
+        The grid is drawn using the logical grid_size (which scales with zoom)
+        so that grid lines always align with tile positions.
+        """
         if not self.show_grid:
             return
         
@@ -758,7 +1213,8 @@ class VehicleCanvas(tk.Canvas):
         self.delete("grid")
         self.delete("axis")
         
-        # Calculate grid bounds (with padding for scrolling)
+        # Calculate grid bounds using the scaled grid_size (for logical alignment)
+        # This ensures grid lines align with tiles at any zoom level
         grid_x1 = int(view_x1 / self.grid_size) - 1
         grid_y1 = int(view_y1 / self.grid_size) - 1
         grid_x2 = int(view_x2 / self.grid_size) + 1
@@ -820,6 +1276,9 @@ class VehicleCanvas(tk.Canvas):
             width=2,
             tags="axis"
         )
+        
+        # Ensure axis lines and markers are always on top (above cells)
+        self.tag_raise("axis")
     
     def redraw(self):
         """Redraw the entire canvas."""
@@ -851,37 +1310,39 @@ class VehicleCanvas(tk.Canvas):
     
     def update_scroll_region(self):
         """Update the scroll region for infinite scrolling."""
+        # Scale scroll region size with zoom level to maintain same logical tile coverage
+        # At higher zoom, we need a larger scroll region to see the same number of tiles
+        scroll_region_size = self.base_scroll_region_size * self.zoom_level
+        
         # Set a large scroll region centered around current view
         # This allows scrolling in all directions
-        center = self.scroll_region_size // 2
+        center = scroll_region_size // 2
         scroll_region = (
             -center, -center,
             center, center
         )
         self.config(scrollregion=scroll_region)
         
+        # Store current scroll region size for grid drawing
+        self.scroll_region_size = scroll_region_size
+        
         # Redraw grid after scroll region changes
         self.after_idle(self.draw_grid)
     
-    def on_mouse_wheel(self, event):
-        """Handle mouse wheel for scrolling (non-zoom)."""
-        # Just redraw grid after scrolling
-        self.after_idle(self.draw_grid)
-    
     def on_zoom_wheel(self, event):
-        """Handle Ctrl+MouseWheel for zooming."""
+        """Handle mouse wheel for zooming."""
         # Zoom in or out based on scroll direction
-        # On Linux, delta might be negative for scroll up, positive for scroll down
-        # On Windows/Mac, delta is typically positive for scroll up
-        delta = event.delta
-        if hasattr(event, 'num') and event.num in [4, 5]:  # Linux
-            # Linux: 4 = scroll up, 5 = scroll down
+        # On Linux, button events use num (4 = scroll up, 5 = scroll down)
+        # On Windows/Mac, MouseWheel events use delta (positive = scroll up)
+        if hasattr(event, 'num') and event.num in [4, 5]:  # Linux button events
+            # Linux: 4 = scroll up (zoom in), 5 = scroll down (zoom out)
             if event.num == 4:
                 self.zoom_in()
             else:
                 self.zoom_out()
-        else:
+        elif hasattr(event, 'delta'):  # Windows/Mac MouseWheel events
             # Windows/Mac: delta > 0 = scroll up = zoom in
+            delta = event.delta
             if delta > 0:
                 self.zoom_in()
             else:
@@ -908,10 +1369,10 @@ class VehicleCanvas(tk.Canvas):
         # Clamp zoom level
         zoom_level = max(self.min_zoom, min(self.max_zoom, zoom_level))
         
-        # Get current view center before zoom
+        # Get current view center before zoom (in grid coordinates)
         old_zoom = self.zoom_level
         
-        # Get scroll region to understand coordinate system
+        # Get current scroll position and convert to grid coordinates
         scroll_region = self.cget("scrollregion")
         if not scroll_region:
             # No scroll region yet, just update zoom
@@ -966,27 +1427,64 @@ class VehicleCanvas(tk.Canvas):
         self.zoom_level = zoom_level
         self.grid_size = self.base_grid_size * self.zoom_level
         
-        # Calculate new canvas coordinates for the same grid position
-        new_canvas_x = grid_x * self.grid_size
-        new_canvas_y = grid_y * self.grid_size
+        # Update scroll region FIRST (so it's scaled to new zoom)
+        self.update_scroll_region()
         
-        # Calculate new scroll position to keep the same point centered
-        # We want: new_canvas_x = region_min_x + new_scroll_x * region_width + canvas_width / 2
-        # So: new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
-        new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
-        new_scroll_y = (new_canvas_y - region_min_y - canvas_height / 2) / region_height
-        
-        # Clamp scroll values
-        new_scroll_x = max(0.0, min(1.0, new_scroll_x))
-        new_scroll_y = max(0.0, min(1.0, new_scroll_y))
-        
-        self.xview_moveto(new_scroll_x)
-        self.yview_moveto(new_scroll_y)
+        # Get the new scroll region
+        scroll_region = self.cget("scrollregion")
+        if scroll_region:
+            region = scroll_region.split()
+            region_min_x = float(region[0])
+            region_min_y = float(region[1])
+            region_max_x = float(region[2])
+            region_max_y = float(region[3])
+            region_width = region_max_x - region_min_x
+            region_height = region_max_y - region_min_y
+            
+            # Calculate new canvas coordinates for the same grid position
+            new_canvas_x = grid_x * self.grid_size
+            new_canvas_y = grid_y * self.grid_size
+            
+            # Calculate new scroll position to keep the same point centered
+            # We want: new_canvas_x = region_min_x + new_scroll_x * region_width + canvas_width / 2
+            # So: new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
+            new_scroll_x = (new_canvas_x - region_min_x - canvas_width / 2) / region_width
+            new_scroll_y = (new_canvas_y - region_min_y - canvas_height / 2) / region_height
+            
+            # Clamp scroll values
+            new_scroll_x = max(0.0, min(1.0, new_scroll_x))
+            new_scroll_y = max(0.0, min(1.0, new_scroll_y))
+            
+            self.xview_moveto(new_scroll_x)
+            self.yview_moveto(new_scroll_y)
         
         # Notify callback if set
         if self.zoom_callback:
             self.zoom_callback()
         
-        # Redraw everything
-        self.redraw()
+        # Redraw everything (skip scroll region update since we already did it)
+        # Delete only grid and cells, keep axis markers
+        self.delete("grid")
+        self.delete("cell")
+        
+        # Draw grid (which includes axis markers)
+        self.draw_grid()
+        
+        # Get all unique coordinates with parts or items
+        coords = set()
+        if hasattr(self.vehicle, 'parts'):
+            for part in self.vehicle.parts:
+                if 'x' in part and 'y' in part:
+                    coords.add((part['x'], part['y']))
+        
+        if hasattr(self.vehicle, 'items'):
+            for item in self.vehicle.items:
+                if 'x' in item and 'y' in item:
+                    coords.add((item['x'], item['y']))
+        
+        # Draw each cell
+        for x, y in coords:
+            self.draw_cell(x, y)
+        
+        # Don't call update_scroll_region again - we already did it
 

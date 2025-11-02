@@ -206,6 +206,16 @@ class TileEditorDialog:
         result = ""
         if 'item' in item:
             result += f"Item: {item['item']}"
+        if 'items' in item:
+            # Handle "items" (plural) field - can be string or list
+            if result:
+                result += " | "
+            items_value = item['items']
+            if isinstance(items_value, list):
+                items_str = ", ".join(str(i) for i in items_value)
+                result += f"Items: {items_str}"
+            else:
+                result += f"Items: {items_value}"
         if 'item_groups' in item:
             if result:
                 result += " | "
@@ -556,15 +566,25 @@ class TileEditorDialog:
         item_var = tk.StringVar(value=item.get('item', ''))
         ttk.Entry(main_frame, textvariable=item_var, width=30).grid(row=0, column=1, pady=5)
         
+        # Items (plural) - can be string or list
+        items_value = item.get('items', '')
+        if isinstance(items_value, list):
+            items_str = ", ".join(str(i) for i in items_value)
+        else:
+            items_str = str(items_value) if items_value else ''
+        ttk.Label(main_frame, text="Items (comma-separated):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        items_var = tk.StringVar(value=items_str)
+        ttk.Entry(main_frame, textvariable=items_var, width=30).grid(row=1, column=1, pady=5)
+        
         # Item groups
-        ttk.Label(main_frame, text="Item Groups (comma-separated):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Item Groups (comma-separated):").grid(row=2, column=0, sticky=tk.W, pady=5)
         groups_var = tk.StringVar(value=", ".join(item.get('item_groups', [])))
-        ttk.Entry(main_frame, textvariable=groups_var, width=30).grid(row=1, column=1, pady=5)
+        ttk.Entry(main_frame, textvariable=groups_var, width=30).grid(row=2, column=1, pady=5)
         
         # Chance
-        ttk.Label(main_frame, text="Chance (%):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Chance (%):").grid(row=3, column=0, sticky=tk.W, pady=5)
         chance_var = tk.StringVar(value=str(item.get('chance', '')))
-        ttk.Entry(main_frame, textvariable=chance_var, width=30).grid(row=2, column=1, pady=5)
+        ttk.Entry(main_frame, textvariable=chance_var, width=30).grid(row=3, column=1, pady=5)
         
         def save_item():
             # Update item
@@ -573,6 +593,20 @@ class TileEditorDialog:
                 item['item'] = item_name
             elif 'item' in item:
                 del item['item']
+            
+            # Update items (plural) - can be string or list
+            items_str = items_var.get().strip()
+            if items_str:
+                # Try to parse as comma-separated list
+                items_list = [i.strip() for i in items_str.split(',') if i.strip()]
+                if len(items_list) == 1:
+                    # Single item - store as string
+                    item['items'] = items_list[0]
+                elif len(items_list) > 1:
+                    # Multiple items - store as list
+                    item['items'] = items_list
+            elif 'items' in item:
+                del item['items']
             
             groups = groups_var.get().strip()
             if groups:
@@ -595,7 +629,7 @@ class TileEditorDialog:
             if self.canvas_update_callback:
                 self.canvas_update_callback()
         
-        ttk.Button(main_frame, text="Save", command=save_item).grid(row=3, column=0, columnspan=2, pady=10)
+        ttk.Button(main_frame, text="Save", command=save_item).grid(row=4, column=0, columnspan=2, pady=10)
         
         # Grab after UI is set up
         item_dialog.update_idletasks()
@@ -684,15 +718,20 @@ class TileEditorDialog:
         item_var = tk.StringVar()
         ttk.Entry(manual_frame, textvariable=item_var, width=30).grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
         
+        # Items (plural) - can be string or list
+        ttk.Label(manual_frame, text="Items (comma-separated):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        items_var = tk.StringVar()
+        ttk.Entry(manual_frame, textvariable=items_var, width=30).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
+        
         # Item groups
-        ttk.Label(manual_frame, text="Item Groups (comma-separated):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(manual_frame, text="Item Groups (comma-separated):").grid(row=2, column=0, sticky=tk.W, pady=5)
         groups_var = tk.StringVar()
-        ttk.Entry(manual_frame, textvariable=groups_var, width=30).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
+        ttk.Entry(manual_frame, textvariable=groups_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
         
         # Chance
-        ttk.Label(manual_frame, text="Chance (%):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(manual_frame, text="Chance (%):").grid(row=3, column=0, sticky=tk.W, pady=5)
         chance_var = tk.StringVar()
-        ttk.Entry(manual_frame, textvariable=chance_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        ttk.Entry(manual_frame, textvariable=chance_var, width=30).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
         
         manual_frame.columnconfigure(1, weight=1)
         
@@ -714,17 +753,28 @@ class TileEditorDialog:
             else:
                 # Manual entry
                 item_name = item_var.get().strip()
+                items_str = items_var.get().strip()
                 groups = groups_var.get().strip()
                 chance_str = chance_var.get().strip()
                 
-                if not item_name and not groups:
-                    messagebox.showwarning("Invalid Input", "Please provide either an item or item groups.")
+                if not item_name and not items_str and not groups:
+                    messagebox.showwarning("Invalid Input", "Please provide an item, items, or item groups.")
                     return
                 
                 item = {'x': self.x, 'y': self.y}
                 
                 if item_name:
                     item['item'] = item_name
+                
+                # Handle items (plural) - can be string or list
+                if items_str:
+                    items_list = [i.strip() for i in items_str.split(',') if i.strip()]
+                    if len(items_list) == 1:
+                        # Single item - store as string
+                        item['items'] = items_list[0]
+                    elif len(items_list) > 1:
+                        # Multiple items - store as list
+                        item['items'] = items_list
                 
                 if groups:
                     item['item_groups'] = [g.strip() for g in groups.split(',')]

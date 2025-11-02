@@ -415,30 +415,9 @@ bn_vehicle_painter/
 
 ---
 
-## 🔮 Future Enhancements
-
-Potential features for future versions:
-
-- [ ] 3D preview of vehicles
-- [ ] Template vehicle library
-- [ ] Part statistics and validation
-- [ ] Batch operations on multiple tiles
-- [ ] Export to image formats
-- [ ] Integration with game modding tools
-- [ ] Collaborative editing features
-- [ ] Part property presets
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
 ## 🙏 Acknowledgments
 
-- Built for the **Cataclysm: Bright Nights** community
+- Vibe-coded for the **Cataclysm: Bright Nights** community
 - Compatible with Cataclysm: Bright Nights vehicle JSON format
 - Inspired by the need for better vehicle design tools
 
